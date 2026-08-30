@@ -120,6 +120,10 @@ Chaque agent implémente exactement une issue.
 
 La PR reste incomplète sans tests, preuve, lien d'issue ou revue. Commits compréhensibles et français. Aucun secret, dépendance générée, fichier local ou artefact sans rapport.
 
+## Revue GitHub et auto-approbation
+
+Le compte GitHub qui a ouvert une PR ne peut pas l'approuver lui-même. Si le reviewer et l'auteur utilisent le même compte, GitHub peut refuser l'action `APPROVE` : publier alors une revue `COMMENT` détaillée avec le verdict, les contrôles effectués et les éventuels points restants. Ne jamais présenter cette revue comme une approbation ; une validation `APPROVED` doit venir d'un autre compte habilité.
+
 ## Protocole de mise à jour d'une PR
 
 Lorsqu'une PR ouverte devient en conflit ou que `main` évolue :
