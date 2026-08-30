@@ -120,6 +120,23 @@ Chaque agent implémente exactement une issue.
 
 La PR reste incomplète sans tests, preuve, lien d'issue ou revue. Commits compréhensibles et français. Aucun secret, dépendance générée, fichier local ou artefact sans rapport.
 
+## Revue GitHub et auto-approbation
+
+Le compte GitHub qui a ouvert une PR ne peut pas l'approuver lui-même. Si le reviewer et l'auteur utilisent le même compte, GitHub peut refuser l'action `APPROVE` : publier alors une revue `COMMENT` détaillée avec le verdict, les contrôles effectués et les éventuels points restants. Ne jamais présenter cette revue comme une approbation ; une validation `APPROVED` doit venir d'un autre compte habilité.
+
+## Protocole de mise à jour d'une PR
+
+Lorsqu'une PR ouverte devient en conflit ou que `main` évolue :
+
+1. Vérifier via GitHub l'issue, la PR, sa branche, son commit de tête et son état de fusion.
+2. Vérifier localement que le worktree est propre et que la branche suit bien son remote.
+3. Récupérer `origin/main`, puis fusionner `origin/main` dans la branche de la PR. Ne pas réinitialiser la branche et ne pas recréer la PR.
+4. Résoudre chaque conflit au fichier près : conserver les règles de `main`, les changements de l'issue et les contrats existants ; ne jamais supprimer silencieusement une règle ou un test. En cas d'ambiguïté produit, demander une décision dans l'issue.
+5. Vérifier l'absence de marqueurs de conflit et exécuter `git diff --check`.
+6. Relancer les barrières applicables, au minimum `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` et `pnpm test:e2e`, puis `pnpm format:check` si la documentation ou le formatage ont changé.
+7. Créer un commit de merge explicite en français, pousser la même branche et vérifier sur GitHub que le commit de tête est à jour et que la PR est redevenue fusionnable.
+8. Signaler les checks CI encore en attente ou absents ; ne pas déclarer la PR validée sans revue humaine ou approbation GitHub.
+
 ## Définition de terminé
 
 Une issue est terminée seulement si tous les critères sont démontrés, les tests demandés et existants passent, la construction réussit, les cas invalides pertinents sont gérés, toutes les preuves visuelles sont présentes, la revue est faite et aucun changement sans rapport ou asset sans licence n'est inclus.

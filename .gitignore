@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+docs/preuves/playwright-resultats/
+!docs/preuves/playwright-report/
+!docs/preuves/playwright-report/**

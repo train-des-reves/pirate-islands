@@ -1,0 +1,32 @@
+{
+  "name": "pirate-islands",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "pnpm": ">=11.19.0 <12"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @pirate/protocole build && concurrently --kill-others-on-fail --names client,serveur \"pnpm --filter @pirate/client dev\" \"pnpm --filter @pirate/serveur dev\"",
+    "build": "pnpm -r --if-present build",
+    "lint": "eslint .",
+    "typecheck": "tsc -b && tsc --noEmit -p tsconfig.tools.json",
+    "test": "vitest run --config vitest.config.mts",
+    "test:e2e": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.13.3",
+    "concurrently": "10.0.5",
+    "eslint": "10.9.1",
+    "globals": "17.11.0",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.11"
+  }
+}
