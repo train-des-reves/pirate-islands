@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  babylonjs: true
+  esbuild: true
+  msgpackr-extract: true
+minimumReleaseAgeExclude:
+  - '@colyseus/schema@5.0.25'
+  - tsx@4.23.13

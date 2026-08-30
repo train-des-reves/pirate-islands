@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@pirate/protocole": ["packages/protocole/src/index.ts"],
+      "@pirate/coeur-jeu": ["packages/coeur-jeu/src/index.ts"],
+      "@pirate/support-tests": ["packages/support-tests/src/index.ts"]
+    }
+  },
+  "include": ["vitest.config.mts", "playwright.config.ts", "e2e/**/*.ts", "tests/**/*.ts"]
+}
