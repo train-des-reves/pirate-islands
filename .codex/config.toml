@@ -1,0 +1,4 @@
+# Configuration Codex locale au projet.
+# Le mode full access permet les écritures dans .git et les commandes Git.
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
