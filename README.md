@@ -1,7 +1,8 @@
 # Pirate Islands
 
-Fondation minimale, exécutable et testable du jeu navigateur Pirate Islands. Cette étape pose les
-contrats techniques ; elle n'implémente aucun gameplay.
+Fondation exécutable et testable du jeu navigateur Pirate Islands. Le client contient maintenant
+un bac à sable première personne : les actions sémantiques pilotent le déplacement, le regard et
+les collisions locales sans exposer les touches brutes au gameplay.
 
 ## Démarrage rapide
 
@@ -30,9 +31,26 @@ sont publiques et ne doivent jamais contenir de secret.
 | `pnpm test`      | Lance les tests fumée Vitest, dont `/health`    |
 | `pnpm test:e2e`  | Lance le test Chromium Playwright               |
 
+## Contrôles par défaut
+
+Les mêmes actions fonctionnent sur les claviers français et QWERTY :
+
+| Action    | Raccourci par défaut       |
+| --------- | -------------------------- |
+| Avancer   | `Z` ou `W`                 |
+| Reculer   | `S`                        |
+| Gauche    | `Q` ou `A`                 |
+| Droite    | `D`                        |
+| Interagir | `E`                        |
+| Tirer     | bouton gauche de la souris |
+| Pause     | `Échap`                    |
+
+Un clic dans la scène verrouille le pointeur. La souris regarde autour du joueur, le déplacement
+reste relatif à son lacet et `Échap` libère le pointeur en ouvrant la pause.
+
 ## Organisation
 
-- `apps/client` : client Vite et scène Babylon.js mer/ciel.
+- `apps/client` : client Vite, scène Babylon.js, entrées sémantiques et bac à sable première personne.
 - `apps/serveur` : serveur HTTP Node.js, Colyseus et route `/health`.
 - `packages/protocole` : contrats JSON partagés.
 - `packages/coeur-jeu` : axes, unités et types du monde de jeu.
@@ -45,5 +63,5 @@ sont publiques et ne doivent jamais contenir de secret.
 pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e
 ```
 
-La preuve visuelle de la fondation est conservée dans `docs/preuves/` après l'exécution du test
-Chromium.
+La preuve visuelle du parcours première personne est conservée dans `docs/preuves/` après
+l'exécution du test Chromium.
