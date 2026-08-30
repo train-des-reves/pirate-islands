@@ -1,17 +1,9 @@
-import {
-  Color3,
-  Color4,
-  Engine,
-  FreeCamera,
-  HemisphericLight,
-  MeshBuilder,
-  Scene,
-  StandardMaterial,
-  Vector3,
-} from 'babylonjs';
+import { Engine, Scene } from 'babylonjs';
 
+import { GRAINE_MVP_PAR_DEFAUT, genererMonde } from '@pirate/coeur-jeu';
 import { estReponseSante } from '@pirate/protocole';
 
+import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
 import './style.css';
 
 const LARGEUR_REFERENCE = 1280;
@@ -28,6 +20,17 @@ const canvasJeu = canvas;
 const conteneurApplication = application;
 const statutServeur = indicateurServeur;
 
+const paramètres = new URLSearchParams(window.location.search);
+const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
+const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
+const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
+const monde = genererMonde(graine);
+
+conteneurApplication.dataset.graine = monde.graine;
+conteneurApplication.dataset.camera = modeCamera;
+conteneurApplication.dataset.iles = String(monde.iles.length);
+conteneurApplication.dataset.diagnostics = modeE2E ? 'actifs' : 'inactifs';
+
 canvasJeu.width = LARGEUR_REFERENCE;
 canvasJeu.height = HAUTEUR_REFERENCE;
 
@@ -38,42 +41,10 @@ function construireScene(): Engine | undefined {
       stencil: true,
     });
     const scene = new Scene(moteur);
-    scene.clearColor = new Color4(0.35, 0.72, 0.86, 1);
-    scene.fogMode = Scene.FOGMODE_EXP2;
-    scene.fogColor = new Color3(0.35, 0.72, 0.86);
-    scene.fogDensity = 0.006;
-
-    const camera = new FreeCamera('camera-principal', new Vector3(0, 4.2, -14), scene);
-    camera.setTarget(new Vector3(0, -0.8, 12));
-    camera.minZ = 0.1;
-    camera.maxZ = 1000;
-
-    const lumière = new HemisphericLight('lumiere-ciel', new Vector3(0, 1, 0), scene);
-    lumière.intensity = 1.1;
-    lumière.diffuse = new Color3(0.82, 0.94, 1);
-    lumière.groundColor = new Color3(0.03, 0.14, 0.22);
-
-    const ciel = MeshBuilder.CreateBox('ciel', { size: 200 }, scene);
-    ciel.isPickable = false;
-    ciel.infiniteDistance = true;
-    const materiauCiel = new StandardMaterial('materiau-ciel', scene);
-    materiauCiel.backFaceCulling = false;
-    materiauCiel.disableLighting = true;
-    materiauCiel.emissiveColor = new Color3(0.18, 0.48, 0.72);
-    ciel.material = materiauCiel;
-
-    const mer = MeshBuilder.CreateGround(
-      'mer',
-      { width: 220, height: 220, subdivisions: 16 },
-      scene,
-    );
-    mer.position.y = -1.35;
-    mer.isPickable = false;
-    const materiauMer = new StandardMaterial('materiau-mer', scene);
-    materiauMer.diffuseColor = new Color3(0.015, 0.32, 0.48);
-    materiauMer.emissiveColor = new Color3(0.005, 0.075, 0.12);
-    materiauMer.specularColor = new Color3(0.35, 0.7, 0.8);
-    mer.material = materiauMer;
+    const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
+    if (modeE2E) {
+      installerMarqueursE2E(scene, monde, mondeBabylon.camera);
+    }
 
     scene.executeWhenReady(() => {
       conteneurApplication.dataset.scene = 'ready';
