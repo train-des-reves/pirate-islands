@@ -5,26 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Fondation navigateur de Pirate Islands : une mer, un ciel et un serveur joignable."
+      content="Pirate Islands : déplacement première personne, regard souris et bac à sable de collision."
     />
-    <title>Pirate Islands — Fondation</title>
+    <title>Pirate Islands — Navigation</title>
   </head>
   <body>
-    <main id="app" class="scene-shell" data-scene="loading">
-      <canvas
-        id="scene-canvas"
-        aria-label="Scène 3D minimale représentant la mer et le ciel"
-      ></canvas>
-      <div class="halo" aria-hidden="true"></div>
+    <main id="app" class="scene-shell" data-scene="loading" data-pause="non" data-pointeur="libere">
+      <canvas id="scene-canvas" aria-label="Scène 3D du bac à sable Pirate Islands"></canvas>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="crosshair" aria-hidden="true"></div>
       <section class="interface" aria-labelledby="titre-jeu">
-        <p class="eyebrow">Fondation navigateur · Cap 001</p>
+        <p class="eyebrow">Navigation première personne · MVP-1C</p>
         <h1 id="titre-jeu" data-testid="titre-jeu">Pirate Islands</h1>
-        <p class="tagline">Une mer à explorer. Un monde prêt à prendre forme.</p>
+        <p class="tagline">
+          Cliquez dans la scène pour prendre la barre et explorer le bac à sable.
+        </p>
+        <p class="controls">
+          ZQSD / WASD pour avancer · souris pour regarder · Échap pour la pause
+        </p>
         <p class="status" data-testid="serveur-status" data-etat="verification">
           <span class="status-dot" aria-hidden="true"></span>
           Vérification du serveur…
         </p>
       </section>
+      <aside class="ath" aria-live="polite">
+        <p data-testid="etat-pointeur">Cliquez dans la scène pour verrouiller le pointeur</p>
+        <p data-testid="diagnostic-jeu" data-position-x="0" data-position-y="0" data-position-z="0">
+          Position 0.0 · 0.0 · 0.0
+        </p>
+      </aside>
+      <div class="pause-overlay" data-testid="pause-overlay" hidden>
+        <section class="pause-card" role="dialog" aria-labelledby="titre-pause">
+          <h2 id="titre-pause">Pause</h2>
+          <p>Le pointeur est libéré. Cliquez dans la scène pour reprendre.</p>
+        </section>
+      </div>
       <p class="coordinates" aria-hidden="true">X · Y · Z &nbsp;|&nbsp; 1280 × 720</p>
     </main>
     <script type="module" src="/src/main.ts"></script>
