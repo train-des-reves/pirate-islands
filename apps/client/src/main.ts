@@ -106,6 +106,17 @@ const diagnosticNombreJoueurs = document.querySelector<HTMLElement>(
 const diagnosticSalleErreur = document.querySelector<HTMLElement>(
   '[data-testid="diagnostic-salle-erreur"]',
 );
+const combatCible = document.querySelector<HTMLElement>('[data-testid="combat-cible"]');
+const combatSanteJoueur = document.querySelector<HTMLElement>(
+  '[data-testid="combat-sante-joueur"]',
+);
+const combatSantePirate = document.querySelector<HTMLElement>(
+  '[data-testid="combat-sante-pirate"]',
+);
+const combatReapparition = document.querySelector<HTMLElement>(
+  '[data-testid="combat-reapparition"]',
+);
+const combatResultat = document.querySelector<HTMLElement>('[data-testid="combat-resultat"]');
 const diagnosticTir = document.querySelector<HTMLElement>('[data-testid="tir-diagnostic"]');
 
 if (
@@ -130,6 +141,11 @@ if (
   !diagnosticSessionId ||
   !diagnosticNombreJoueurs ||
   !diagnosticSalleErreur ||
+  !combatCible ||
+  !combatSanteJoueur ||
+  !combatSantePirate ||
+  !combatReapparition ||
+  !combatResultat ||
   !diagnosticTir
 ) {
   throw new Error('La structure de la page Pirate Islands est incomplète.');
@@ -308,6 +324,11 @@ const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
   sessionId: diagnosticSessionId,
   nombreJoueurs: diagnosticNombreJoueurs,
   erreur: diagnosticSalleErreur,
+  cible: combatCible,
+  santeJoueur: combatSanteJoueur,
+  santePirate: combatSantePirate,
+  reapparition: combatReapparition,
+  resultat: combatResultat,
 };
 const indicateurTir = diagnosticTir;
 
@@ -329,13 +350,28 @@ interface EtatJeuE2E {
 declare global {
   interface Window {
     __pirateIslandsE2E?: {
-      verrouillerPointeur: () => void;
-      libererPointeur: () => void;
-      lireEtat: () => EtatJeuE2E;
-      lireReglages: () => ReglagesJeu;
-      reinitialiser: () => void;
-      tirer: (nombre?: number) => void;
-      avancerTemps: (deltaMs: number) => void;
+      verrouillerPointeur?: () => void;
+      libererPointeur?: () => void;
+      lireEtat?: () => EtatJeuE2E;
+      lireReglages?: () => ReglagesJeu;
+      reinitialiser?: () => void;
+      tirer?: (nombre?: number) => void;
+      avancerTemps?: (deltaMs: number) => void;
+      /** Émet une intention de tir réseau vers le serveur (mode salle). */
+      tirerReseau?: (cibleId?: string) => void;
+      /** Émet une intention de tir volontairement dans le vide (mode salle). */
+      tirerDansLeVide?: () => void;
+      /** Inflige des dégâts au joueur via le mannequin E2E serveur. */
+      infligerDegatsE2E?: (degats: number) => void;
+      /** Lit l'état de combat observé après synchronisation serveur. */
+      lireCombat?: () => {
+        readonly cibleId: string | null;
+        readonly santeJoueur: number;
+        readonly santePirate: number;
+        readonly pirateNeutralise: boolean;
+        readonly enAttenteReapparition: boolean;
+        readonly dernierResultat: unknown;
+      };
     };
   }
 }
@@ -355,6 +391,7 @@ const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
+const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
 const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
 const modeMonde = modeDiagnosticSalle || paramètres.has('graine') || paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
@@ -804,6 +841,14 @@ if (modeDiagnosticSalle) {
   )
     .then((connexion) => {
       diagnosticSalleConnecte = connexion;
+      if (modeCombatE2E) {
+        window.__pirateIslandsE2E = {
+          tirerReseau: connexion.tirer,
+          tirerDansLeVide: connexion.tirerDansLeVide,
+          infligerDegatsE2E: connexion.infligerDegatsE2E,
+          lireCombat: connexion.lireCombat,
+        };
+      }
     })
     .catch((erreur: unknown) => {
       afficherErreurDiagnosticSalle(erreur, elementsDiagnosticSalle);

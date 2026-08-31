@@ -58,12 +58,6 @@ type ClientSalle = Client<{
   userData: DonneesClientSalle;
 }>;
 
-export interface OptionsSalleJeu {
-  readonly graine?: string;
-}
-
-type DonneesClientInconnues = DonneesClientSalle | undefined;
-
 const CODE_MESSAGE_INVALIDE = 4003;
 const CODE_MESSAGE_INCONNU = 4004;
 
@@ -226,6 +220,22 @@ export class SalleJeu extends Room<{
       prochaineReapparitionMs: 0,
     };
 
+    // Un joueur qui vient d'atteindre son échéance de réapparition peut tirer
+    // depuis la dernière position qu'il a synchronisée avant d'être réapparu.
+    // Le serveur réapparaît d'abord le joueur, puis admet l'origine de ce tir
+    // par rapport à la position antérieure comme référence secondaire. Sans
+    // quoi un tir simultané à l'échéance serait rejeté et déconnecterait le
+    // joueur.
+    const positionAvantReapparition = {
+      x: joueur.transformation.x,
+      y: joueur.transformation.y,
+      z: joueur.transformation.z,
+    };
+    const reapparitionImminente = reapparitionDue(
+      maintenant,
+      données.prochaineReapparitionMs,
+    );
+
     this.appliquerReapparitionSiDue(client, joueur, maintenant, données);
     données = client.userData ?? données;
 
@@ -262,6 +272,7 @@ export class SalleJeu extends Room<{
           y: joueur.transformation.y,
           z: joueur.transformation.z,
         },
+        positionAdmise: reapparitionImminente ? positionAvantReapparition : undefined,
         dernierTirMs: données.dernierTirMs,
         derniereSequence: données.derniereSequence,
       },

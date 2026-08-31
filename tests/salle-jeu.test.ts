@@ -409,4 +409,73 @@ describe('SalleJeu Colyseus', () => {
       .toBe('actif');
     serveurModeE2E = false;
   });
+
+  it('refuse une intention d’un tireur mort et le déconnecte', async () => {
+    serveurModeE2E = true;
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendreNombreJoueurs(salle, 1);
+    const sessionId = salle.sessionId;
+
+    salle.send(NOMS_MESSAGES.degatsE2E, { degats: SANTE_JOUEUR_MAXIMALE });
+    await expect
+      .poll(() => salle.state.joueurs.get(sessionId)?.vivant, { timeout: 2_000 })
+      .toBe(false);
+
+    const { intention } = cibleDeterministe(salle, { x: 3, y: 1.62, z: 0 });
+    const départ = attendreDeconnexion(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+    serveurModeE2E = false;
+  });
+
+  it('n’inflige aucun dégât à un joueur touché par un tir ami', async () => {
+    serveurModeE2E = true;
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient, undefined, {
+      graine: 'graine-test',
+    });
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId, {
+      graine: 'graine-test',
+    });
+    await attendreNombreJoueurs(premièreSalle, 2);
+
+    const premierSession = premièreSalle.sessionId;
+    const secondSession = secondeSalle.sessionId;
+    const premierJoueur = premièreSalle.state.joueurs.get(premierSession);
+    const secondJoueur = premièreSalle.state.joueurs.get(secondSession);
+    const positionTireur = premierJoueur?.transformation;
+    const positionCible = secondJoueur?.transformation;
+    expect(positionTireur && positionCible).toBeTruthy();
+
+    const origine = {
+      x: positionTireur!.x,
+      y: positionTireur!.y + 1.62,
+      z: positionTireur!.z,
+    };
+    const vers = {
+      x: positionCible!.x - origine.x,
+      y: positionCible!.y + 1 - origine.y,
+      z: positionCible!.z - origine.z,
+    };
+    const longueur = Math.hypot(vers.x, vers.y, vers.z);
+    const direction = {
+      x: vers.x / longueur,
+      y: vers.y / longueur,
+      z: vers.z / longueur,
+    };
+    const intention = creerIntentionDeTir(origine, direction);
+    const résultat = attendreResultatTir(premièreSalle);
+    premièreSalle.send(NOMS_MESSAGES.intentionTir, intention);
+    const message = await résultat;
+
+    expect(message.cibleId).toBeNull();
+    expect(message.degats).toBe(0);
+    expect(premièreSalle.state.joueurs.get(secondSession)?.sante).toBe(SANTE_JOUEUR_MAXIMALE);
+    expect(premièreSalle.state.joueurs.get(secondSession)?.vivant).toBe(true);
+    serveurModeE2E = false;
+  });
 });

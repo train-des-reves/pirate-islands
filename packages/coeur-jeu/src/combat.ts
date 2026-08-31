@@ -37,6 +37,8 @@ export interface EtatTireurServeur {
   readonly sessionId: string;
   readonly vivant: boolean;
   readonly position: Readonly<Point3D>;
+  /** Position de référence alternative admise pour valider une origine. */
+  readonly positionAdmise?: Readonly<Point3D>;
   /** Horodatage serveur du dernier tir accepté, en millisecondes. */
   readonly dernierTirMs: number;
   /** Dernière séquence acceptée. */
@@ -114,7 +116,11 @@ export function validerIntentionServeur(
     return { valide: false, raison: 'L’origine du tir est invalide.' };
   }
 
-  if (distanceEntre(tireur.position, intention.origine) > DISTANCE_ORIGINE_ADMISE) {
+  const origineAdmise =
+    distanceEntre(tireur.position, intention.origine) <= DISTANCE_ORIGINE_ADMISE ||
+    (tireur.positionAdmise !== undefined &&
+      distanceEntre(tireur.positionAdmise, intention.origine) <= DISTANCE_ORIGINE_ADMISE);
+  if (!origineAdmise) {
     return { valide: false, raison: 'L’origine du tir est trop éloignée du tireur.' };
   }
 
