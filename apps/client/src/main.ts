@@ -22,12 +22,17 @@ import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from '.
 import { construireGaleriePiratesE2E } from './jeu/pirate';
 import { PistoletPremierePersonne } from './jeu/pistolet';
 import {
+  construireMondeBabylon,
+  estModePresentationBateau,
+  installerMarqueursE2E,
+  type ModeCameraMonde,
+} from './jeu/scene';
+import {
   CADENCE_TIR_MS,
   GestionnaireTirLocal,
   type EmetteurIntentionTir,
   type IntentionTir,
 } from './jeu/tir';
-import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
 import {
   annulerReglages,
   appliquerReglages,
@@ -467,11 +472,23 @@ const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
+const cameraDemandée = paramètres.get('camera');
+const modeCamera: ModeCameraMonde =
+  cameraDemandée === 'rivage' ||
+  cameraDemandée === 'bateau-exterieur' ||
+  cameraDemandée === 'bateau-cabine' ||
+  cameraDemandée === 'bateau-cale'
+    ? cameraDemandée
+    : 'ensemble';
+const présentationBateau = estModePresentationBateau(modeCamera);
 const modePresentationPeche = modeE2E && paramètres.get('presentation') === 'regles-peche';
 const modePanneauE2E = modeE2E && paramètres.get('panneau') === '1';
-const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
 const modeMonde =
-  modeDiagnosticSalle || modePresentationPeche || paramètres.has('graine') || paramètres.has('camera');
+  modeDiagnosticSalle ||
+  modePresentationPeche ||
+  présentationBateau ||
+  paramètres.has('graine') ||
+  paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
@@ -490,6 +507,7 @@ conteneurApplication.dataset.mode = modeBateauxPirates
         : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
+conteneurApplication.dataset.presentation = présentationBateau ? modeCamera : 'aucune';
 conteneurApplication.dataset.vue = modeBateauxPirates
   ? 'bateaux-pirates'
   : modeViseurIa
@@ -532,6 +550,26 @@ if (modeViseurIa) {
   document
     .querySelector<HTMLElement>('.tagline')
     ?.replaceChildren('Cliquez dans la scène pour prendre la barre et explorer le bac à sable.');
+}
+
+if (présentationBateau) {
+  const textesPrésentation = {
+    'bateau-exterieur': {
+      eyebrow: 'Bateau de pêche · vue extérieure',
+      tagline: 'Coque, pont, cabine et toit au quai de l’île Aube.',
+    },
+    'bateau-cabine': {
+      eyebrow: 'Bateau de pêche · cabine',
+      tagline: 'Deux hublots, poste de pilotage et pont traversant.',
+    },
+    'bateau-cale': {
+      eyebrow: 'Bateau de pêche · cale',
+      tagline: 'Entrée à l’arrière, escalier et espace accessible sous le pont.',
+    },
+  } as const;
+  const texte = textesPrésentation[modeCamera];
+  document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren(texte.eyebrow);
+  document.querySelector<HTMLElement>('.tagline')?.replaceChildren(texte.tagline);
 }
 
 canvasJeu.width = LARGEUR_REFERENCE;
@@ -733,11 +771,21 @@ function construireScene(): JeuClient | undefined {
 
     if (modeMonde) {
       const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
-      const retirerMarqueurs = modeE2E
-        ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
-        : undefined;
+      const retirerMarqueurs =
+        modeE2E && !présentationBateau
+          ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
+          : undefined;
 
       scene.executeWhenReady(() => {
+        conteneurApplication.dataset.bateau = mondeBabylon.bateau.descripteur.id;
+        conteneurApplication.dataset.bateauHublots = String(mondeBabylon.bateau.hublots.length);
+        conteneurApplication.dataset.bateauSurfaces = String(mondeBabylon.bateau.surfaces.length);
+        conteneurApplication.dataset.bateauCollisions = String(
+          mondeBabylon.bateau.collisions.length,
+        );
+        conteneurApplication.dataset.bateauAncrages = String(
+          mondeBabylon.bateau.descripteur.ancrages.length,
+        );
         conteneurApplication.dataset.scene = 'ready';
       });
       const boucle = (): void => scene.render();
