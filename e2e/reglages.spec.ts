@@ -64,7 +64,13 @@ test('n’expose pas le crochet hors du mode E2E explicite', async ({ page }) =>
     timeout: 10_000,
   });
   await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
-  await expect.poll(() => page.evaluate(() => Boolean(window.__pirateIslandsE2E))).toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean((window as unknown as { __pirateIslandsE2E?: unknown }).__pirateIslandsE2E),
+      ),
+    )
+    .toBe(false);
 });
 
 test('configure les réglages, recharge et conserve le déplacement avec Z', async ({ page }) => {
