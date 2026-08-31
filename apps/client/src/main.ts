@@ -16,7 +16,7 @@ import { estReponseSante } from '@pirate/protocole';
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
 import { creerEtatActions, GestionnaireEntrees } from './jeu/entrees';
 import { construireBacASable } from './jeu/monde-test';
-import { creerEtatJoueur, simulerMouvementJoueur, type EtatJoueur } from './jeu/mouvement';
+import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
 import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
 
 import './style.css';
@@ -167,6 +167,7 @@ function construireScene(): JeuClient | undefined {
     let joueur = creerEtatJoueur(POSITION_DEPART);
     let enPause = false;
     let verrouillageE2EForce = false;
+    let tempsSimulationAccumule = 0;
     let dernierEtatEntrees = creerEtatActions();
     let derniereCollision: EtatJoueur['collision'] = 'aucune';
 
@@ -268,7 +269,7 @@ function construireScene(): JeuClient | undefined {
     let dernierTemps = performance.now();
     const boucle = (): void => {
       const maintenant = performance.now();
-      const deltaSecondes = Math.min(0.05, Math.max(0, (maintenant - dernierTemps) / 1000));
+      const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
       dernierTemps = maintenant;
 
       if (verrouillageE2EForce && !enPause && !entrees.estPointeurVerrouille()) {
@@ -283,13 +284,16 @@ function construireScene(): JeuClient | undefined {
 
       if (!enPause && dernierEtatEntrees.pointeurVerrouille) {
         camera.regarder(dernierEtatEntrees.regardX, dernierEtatEntrees.regardY);
-        joueur = simulerMouvementJoueur(
+        const résultatSimulation = simulerMouvementParPasFixes(
           joueur,
           dernierEtatEntrees,
           camera.obtenirEtat().lacet,
           deltaSecondes,
           mondeBac,
+          tempsSimulationAccumule,
         );
+        joueur = résultatSimulation.etat;
+        tempsSimulationAccumule = résultatSimulation.accumulation;
         if (joueur.collision !== 'aucune') {
           derniereCollision = joueur.collision;
         }
@@ -298,6 +302,8 @@ function construireScene(): JeuClient | undefined {
           y: joueur.position.y + HAUTEUR_YEUX,
           z: joueur.position.z,
         });
+      } else {
+        tempsSimulationAccumule = 0;
       }
 
       actualiserInterface();
