@@ -6,6 +6,14 @@ Tout le projet est en français : interface, erreurs, documentation, issues, PR,
 
 Ne pas traduire les noms imposés par une API, une bibliothèque, un protocole ou un outil externe (`package.json`, TypeScript, WebSocket, méthodes Babylon.js, clés Colyseus, scripts usuels `build` et `test`). Toute formulation choisie par l'équipe reste française.
 
+## Coordination planifiée
+
+La coordination du dépôt se fait par une tâche planifiée toutes les cinq minutes, jamais par un agent surveillant permanent. À chaque passage, la tâche planifiée vérifie les issues, leurs dépendances, les PR et les branches, puis lance un exécuteur isolé pour chaque issue prête. Tout exécuteur utilise `gpt-5.6-luna` avec l'effort de raisonnement `max` et transmet ses demandes et son avancement à son parent par `multi_agent_v1__send_input`. Lorsqu'il termine ou se bloque, il envoie immédiatement un message récapitulatif au parent via la fonction `send_message_to_thread` (`mcp__codex_app.send_message_to_thread`) ; ne pas utiliser un canal direct app-server ni supposer qu'un message ordinaire de sous-agent sera routé. Toute revue indépendante est effectuée par `gpt-5.6-terra` avec l'effort `medium` et, lorsqu'elle termine ou se bloque, le reviewer envoie immédiatement son verdict ou son diagnostic au parent via `send_message_to_thread`. Tant qu'il s'agit de la même PR, réutiliser la tâche du reviewer existant et lui transmettre chaque nouveau commit par `send_message_to_thread` ; ne pas créer de reviewer parallèle ou dupliqué. N'archiver le reviewer qu'après la fusion effective de sa PR.
+
+Ne jamais réattribuer une issue lorsqu'une branche, une PR ou une tâche active est déjà présente ou ambiguë : consigner le blocage dans l'issue et attendre son identification. À chaque cycle, vérifier explicitement si un exécuteur terminé ou bloqué peut être relancé sans conflit, et effectuer la relance lorsque l'isolation est sûre. Tout blocage d'exécuteur relève de la tâche planifiée : diagnostiquer la cause, corriger l'orchestration ou l'environnement dans le périmètre autorisé, puis reprendre le travail ; ne pas laisser un blocage connu sans tentative de déblocage.
+
+Lorsqu'une PR a une CI entièrement verte et une revue Terra `medium` passée, la tâche planifiée la fusionne, puis met `main` à jour et vérifie que le commit de tête et l'état de fusion sont cohérents. Ne jamais fusionner une PR sans ces deux conditions, ni auto-approuver une PR. Après confirmation de la fusion, archiver la tâche de l'exécuteur et celle du reviewer, puis fermer l'issue correspondante ; ne fermer aucune issue avant que la PR soit effectivement fusionnée.
+
 ## Contexte produit
 
 Pirate Islands est un jeu multijoueur 3D en vue à la première personne dans un navigateur. Les joueurs sont des pêcheurs qui voyagent d'île en île sur un petit bateau. Celui-ci comporte visiblement un toit, des hublots et une cale accessible. Les joueurs utilisent un pistolet contre des pirates en mer, sur leurs bateaux, et à terre.
@@ -104,7 +112,7 @@ Chaque PR contient `## Preuve visuelle`, y compris infrastructure, serveur et pr
 - une phrase disant ce que le relecteur vérifie ;
 - pour un travail invisible, un harnais visuel : fenêtres synchronisées, état réseau, diagnostic ou rapport Playwright. Une capture de terminal seule ne suffit pas.
 
-Fournir toutes les vues nommées dans l'issue, en 1280×720 sauf indication. Masquer les diagnostics sans rapport. La preuve provient obligatoirement de la branche de PR.
+Fournir toutes les vues nommées dans l'issue, en 1280×720 sauf indication. Masquer les diagnostics sans rapport. La preuve provient obligatoirement de la branche de PR. Les chemins relatifs vers des binaires ne suffisent pas dans une description GitHub : téléverser chaque image/vidéo depuis cette branche dans les assets d'une pré-version dédiée (par exemple `mvp-1b-pr22-preuve`) avec `gh release create`/`gh release upload` ou l'interface Releases, puis intégrer dans la PR l'URL absolue `browser_download_url`. Vérifier le nom, le type MIME, la taille et l'ouverture de chaque asset ; ne pas déclarer la preuve tant que les images ne s'affichent pas dans la description.
 
 ## Processus issue et PR
 
@@ -135,7 +143,8 @@ Lorsqu'une PR ouverte devient en conflit ou que `main` évolue :
 5. Vérifier l'absence de marqueurs de conflit et exécuter `git diff --check`.
 6. Relancer les barrières applicables, au minimum `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` et `pnpm test:e2e`, puis `pnpm format:check` si la documentation ou le formatage ont changé.
 7. Créer un commit de merge explicite en français, pousser la même branche et vérifier sur GitHub que le commit de tête est à jour et que la PR est redevenue fusionnable.
-8. Signaler les checks CI encore en attente ou absents ; ne pas déclarer la PR validée sans revue humaine ou approbation GitHub.
+8. Après tout nouveau commit, contrôler que les URLs des assets de preuve pointent bien vers la version publiée correspondante ; remplacer les assets avec `--clobber` si nécessaire et vérifier à nouveau leur type MIME et leur affichage dans la PR.
+9. Signaler les checks CI encore en attente ou absents ; ne pas déclarer la PR validée sans revue humaine ou approbation GitHub.
 
 ## Définition de terminé
 
