@@ -12,6 +12,7 @@ import {
   calculerDirectionRelativeCamera,
   creerEtatJoueur,
   creerMondeCollision,
+  simulerMouvementParPasFixes,
   simulerMouvementJoueur,
 } from '../apps/client/src/jeu/mouvement';
 
@@ -291,6 +292,24 @@ describe('mouvement et collisions', () => {
     );
 
     expect(joueur.position.z).toBeCloseTo(-monde.rayonJoueur);
+    expect(joueur.collision).toBe('mur');
+  });
+
+  it('conserve la vitesse réelle avec des frames lentes et atteint le mur', () => {
+    const monde = creerMondeCollision([
+      { minX: -2, maxX: 2, minY: 0, maxY: 3, minZ: 1.6, maxZ: 2.05 },
+    ]);
+    const actions = { ...creerEtatActions(), avancer: true };
+    let joueur = creerEtatJoueur({ x: 0, y: 0, z: -6.5 });
+    let accumulation = 0;
+
+    for (let image = 0; image < 8; image += 1) {
+      const résultat = simulerMouvementParPasFixes(joueur, actions, 0, 0.25, monde, accumulation);
+      joueur = résultat.etat;
+      accumulation = résultat.accumulation;
+    }
+
+    expect(joueur.position.z).toBeCloseTo(1.6 - monde.rayonJoueur);
     expect(joueur.collision).toBe('mur');
   });
 });

@@ -10,17 +10,14 @@ import {
   Vector3,
 } from 'babylonjs';
 
+import { GRAINE_MVP_PAR_DEFAUT, genererMonde } from '@pirate/coeur-jeu';
 import { estReponseSante } from '@pirate/protocole';
 
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
 import { creerEtatActions, GestionnaireEntrees } from './jeu/entrees';
 import { construireBacASable } from './jeu/monde-test';
-import {
-  creerEtatJoueur,
-  simulerMouvementJoueur,
-  type EtatJoueur,
-  type MondeCollision,
-} from './jeu/mouvement';
+import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
+import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
 
 import './style.css';
 
@@ -47,9 +44,6 @@ const overlayPause = calquePause;
 const diagnosticJeu = diagnostic;
 const indicateurPointeur = etatPointeur;
 
-canvasJeu.width = LARGEUR_REFERENCE;
-canvasJeu.height = HAUTEUR_REFERENCE;
-
 interface EtatJeuE2E {
   readonly position: { readonly x: number; readonly y: number; readonly z: number };
   readonly camera: EtatRegard;
@@ -71,12 +65,36 @@ declare global {
 
 interface JeuClient {
   readonly moteur: Engine;
-  readonly entrees: GestionnaireEntrees;
-  readonly camera: CameraPremierePersonne;
-  readonly monde: MondeCollision;
-  readonly lireEtat: () => EtatJeuE2E;
   detruire: () => void;
 }
+
+const paramètres = new URLSearchParams(window.location.search);
+const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
+const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
+const modeMonde = paramètres.has('graine') || paramètres.has('camera');
+const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
+const monde = genererMonde(graine);
+
+conteneurApplication.dataset.mode = modeMonde ? 'monde' : 'bac';
+conteneurApplication.dataset.graine = monde.graine;
+conteneurApplication.dataset.camera = modeCamera;
+conteneurApplication.dataset.iles = String(monde.iles.length);
+conteneurApplication.dataset.diagnostics = modeMonde && modeE2E ? 'actifs' : 'inactifs';
+conteneurApplication.dataset.pause = 'non';
+conteneurApplication.dataset.pointeur = 'libere';
+conteneurApplication.dataset.collision = 'aucune';
+
+if (!modeMonde) {
+  document
+    .querySelector<HTMLElement>('.eyebrow')
+    ?.replaceChildren('Navigation première personne · MVP-1C');
+  document
+    .querySelector<HTMLElement>('.tagline')
+    ?.replaceChildren('Cliquez dans la scène pour prendre la barre et explorer le bac à sable.');
+}
+
+canvasJeu.width = LARGEUR_REFERENCE;
+canvasJeu.height = HAUTEUR_REFERENCE;
 
 function construireScene(): JeuClient | undefined {
   try {
@@ -85,6 +103,33 @@ function construireScene(): JeuClient | undefined {
       stencil: true,
     });
     const scene = new Scene(moteur);
+
+    if (modeMonde) {
+      const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
+      const retirerMarqueurs = modeE2E
+        ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
+        : undefined;
+
+      scene.executeWhenReady(() => {
+        conteneurApplication.dataset.scene = 'ready';
+      });
+      const boucle = (): void => scene.render();
+      moteur.runRenderLoop(boucle);
+      const redimensionner = (): void => moteur.resize();
+      window.addEventListener('resize', redimensionner);
+
+      return {
+        moteur,
+        detruire: () => {
+          retirerMarqueurs?.();
+          window.removeEventListener('resize', redimensionner);
+          moteur.stopRenderLoop(boucle);
+          mondeBabylon.liberer();
+          moteur.dispose();
+        },
+      };
+    }
+
     scene.clearColor = new Color4(0.34, 0.67, 0.8, 1);
     scene.fogMode = Scene.FOGMODE_EXP2;
     scene.fogColor = new Color3(0.34, 0.67, 0.8);
@@ -118,13 +163,16 @@ function construireScene(): JeuClient | undefined {
     materiauCiel.emissiveColor = new Color3(0.16, 0.42, 0.64);
     ciel.material = materiauCiel;
 
-    const monde = construireBacASable(scene);
+    const mondeBac = construireBacASable(scene);
     let joueur = creerEtatJoueur(POSITION_DEPART);
     let enPause = false;
+    let verrouillageE2EForce = false;
+    let tempsSimulationAccumule = 0;
     let dernierEtatEntrees = creerEtatActions();
     let derniereCollision: EtatJoueur['collision'] = 'aucune';
 
     const mettreEnPause = (): void => {
+      verrouillageE2EForce = false;
       enPause = true;
       actualiserInterface();
     };
@@ -166,7 +214,7 @@ function construireScene(): JeuClient | undefined {
       indicateurPointeur.textContent = etat.pointeurVerrouille
         ? 'Pointeur verrouillé · Échap pour la pause'
         : etat.pause
-          ? 'Jeu en pause · cliquez pour reprendre'
+          ? 'Jeu en pause · cliquez dans la scène pour reprendre'
           : 'Cliquez dans la scène pour verrouiller le pointeur';
       diagnosticJeu.dataset.positionX = etat.position.x.toFixed(3);
       diagnosticJeu.dataset.positionY = etat.position.y.toFixed(3);
@@ -183,10 +231,17 @@ function construireScene(): JeuClient | undefined {
       }
 
       window.__pirateIslandsE2E = {
-        verrouillerPointeur: () => entrees.simulerVerrouillage(true),
-        libererPointeur: () => entrees.simulerVerrouillage(false),
+        verrouillerPointeur: () => {
+          verrouillageE2EForce = true;
+          entrees.simulerVerrouillage(true);
+        },
+        libererPointeur: () => {
+          verrouillageE2EForce = false;
+          entrees.simulerVerrouillage(false);
+        },
         lireEtat,
         reinitialiser: () => {
+          verrouillageE2EForce = false;
           entrees.reinitialiserEtat();
           joueur = creerEtatJoueur(POSITION_DEPART);
           camera.reinitialiser();
@@ -214,8 +269,13 @@ function construireScene(): JeuClient | undefined {
     let dernierTemps = performance.now();
     const boucle = (): void => {
       const maintenant = performance.now();
-      const deltaSecondes = Math.min(0.05, Math.max(0, (maintenant - dernierTemps) / 1000));
+      const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
       dernierTemps = maintenant;
+
+      if (verrouillageE2EForce && !enPause && !entrees.estPointeurVerrouille()) {
+        entrees.simulerVerrouillage(true);
+      }
+
       dernierEtatEntrees = entrees.lireEtat();
 
       if (dernierEtatEntrees.pause) {
@@ -224,13 +284,16 @@ function construireScene(): JeuClient | undefined {
 
       if (!enPause && dernierEtatEntrees.pointeurVerrouille) {
         camera.regarder(dernierEtatEntrees.regardX, dernierEtatEntrees.regardY);
-        joueur = simulerMouvementJoueur(
+        const résultatSimulation = simulerMouvementParPasFixes(
           joueur,
           dernierEtatEntrees,
           camera.obtenirEtat().lacet,
           deltaSecondes,
-          monde,
+          mondeBac,
+          tempsSimulationAccumule,
         );
+        joueur = résultatSimulation.etat;
+        tempsSimulationAccumule = résultatSimulation.accumulation;
         if (joueur.collision !== 'aucune') {
           derniereCollision = joueur.collision;
         }
@@ -239,6 +302,8 @@ function construireScene(): JeuClient | undefined {
           y: joueur.position.y + HAUTEUR_YEUX,
           z: joueur.position.z,
         });
+      } else {
+        tempsSimulationAccumule = 0;
       }
 
       actualiserInterface();
@@ -254,10 +319,6 @@ function construireScene(): JeuClient | undefined {
 
     const jeu: JeuClient = {
       moteur,
-      entrees,
-      camera,
-      monde,
-      lireEtat,
       detruire: () => {
         entrees.detacher();
         window.removeEventListener('resize', redimensionner);
