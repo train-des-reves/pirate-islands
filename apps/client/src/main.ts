@@ -166,10 +166,12 @@ function construireScene(): JeuClient | undefined {
     const mondeBac = construireBacASable(scene);
     let joueur = creerEtatJoueur(POSITION_DEPART);
     let enPause = false;
+    let verrouillageE2EForce = false;
     let dernierEtatEntrees = creerEtatActions();
     let derniereCollision: EtatJoueur['collision'] = 'aucune';
 
     const mettreEnPause = (): void => {
+      verrouillageE2EForce = false;
       enPause = true;
       actualiserInterface();
     };
@@ -228,10 +230,17 @@ function construireScene(): JeuClient | undefined {
       }
 
       window.__pirateIslandsE2E = {
-        verrouillerPointeur: () => entrees.simulerVerrouillage(true),
-        libererPointeur: () => entrees.simulerVerrouillage(false),
+        verrouillerPointeur: () => {
+          verrouillageE2EForce = true;
+          entrees.simulerVerrouillage(true);
+        },
+        libererPointeur: () => {
+          verrouillageE2EForce = false;
+          entrees.simulerVerrouillage(false);
+        },
         lireEtat,
         reinitialiser: () => {
+          verrouillageE2EForce = false;
           entrees.reinitialiserEtat();
           joueur = creerEtatJoueur(POSITION_DEPART);
           camera.reinitialiser();
@@ -261,6 +270,11 @@ function construireScene(): JeuClient | undefined {
       const maintenant = performance.now();
       const deltaSecondes = Math.min(0.05, Math.max(0, (maintenant - dernierTemps) / 1000));
       dernierTemps = maintenant;
+
+      if (verrouillageE2EForce && !enPause && !entrees.estPointeurVerrouille()) {
+        entrees.simulerVerrouillage(true);
+      }
+
       dernierEtatEntrees = entrees.lireEtat();
 
       if (dernierEtatEntrees.pause) {
