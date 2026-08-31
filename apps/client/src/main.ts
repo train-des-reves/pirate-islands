@@ -889,6 +889,26 @@ if (modeDiagnosticSalle) {
       diagnosticSalleConnecte = connexion;
       if (modeCombatE2E) {
         window.__pirateIslandsE2E = {
+          verrouillerPointeur: () => undefined,
+          libererPointeur: () => undefined,
+          lireEtat: () => ({
+            position: { x: 0, y: 0, z: 0 },
+            camera: { lacet: 0, tangage: 0 },
+            pause: false,
+            pointeurVerrouille: false,
+            collision: 'aucune',
+            reglages: reglages.applique,
+            tir: {
+              compteur: 0,
+              etat: { recul: 0, eclairBouche: false },
+              derniereIntention: undefined,
+              intentions: [],
+            },
+          }),
+          lireReglages: () => reglages.applique,
+          reinitialiser: () => undefined,
+          tirer: () => undefined,
+          avancerTemps: () => undefined,
           tirerReseau: connexion.tirer,
           tirerDansLeVide: connexion.tirerDansLeVide,
           infligerDegatsE2E: connexion.infligerDegatsE2E,

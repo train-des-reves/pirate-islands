@@ -263,22 +263,19 @@ export class SalleJeu extends Room<{
       horodatageClient: validationMessage.valeur.horodatageClient,
     };
 
-    const validationTir = validerIntentionServeur(
-      {
-        sessionId: client.sessionId,
-        vivant: joueur.vivant,
-        position: {
-          x: joueur.transformation.x,
-          y: joueur.transformation.y,
-          z: joueur.transformation.z,
-        },
-        positionAdmise: reapparitionImminente ? positionAvantReapparition : undefined,
-        dernierTirMs: données.dernierTirMs,
-        derniereSequence: données.derniereSequence,
+    const etatTireur = {
+      sessionId: client.sessionId,
+      vivant: joueur.vivant,
+      position: {
+        x: joueur.transformation.x,
+        y: joueur.transformation.y,
+        z: joueur.transformation.z,
       },
-      intention,
-      maintenant,
-    );
+      dernierTirMs: données.dernierTirMs,
+      derniereSequence: données.derniereSequence,
+      ...(reapparitionImminente ? { positionAdmise: positionAvantReapparition } : {}),
+    };
+    const validationTir = validerIntentionServeur(etatTireur, intention, maintenant);
 
     if (!validationTir.valide) {
       this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validationTir.raison);
