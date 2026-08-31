@@ -468,15 +468,16 @@ function construireScene(): JeuClient | undefined {
       boutonReprendreJeu.blur();
       enPause = false;
       verrouillageE2EForce = modeE2E;
-      try {
-        void Promise.resolve(canvasJeu.requestPointerLock?.()).catch(() => {
-          verrouillageE2EForce = false;
-        });
-      } catch {
-        verrouillageE2EForce = false;
-      }
       if (modeE2E) {
         entrees.simulerVerrouillage(true);
+      } else {
+        try {
+          void Promise.resolve(canvasJeu.requestPointerLock?.()).catch(() => {
+            verrouillageE2EForce = false;
+          });
+        } catch {
+          verrouillageE2EForce = false;
+        }
       }
       actualiserInterface();
     };
