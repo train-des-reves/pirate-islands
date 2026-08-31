@@ -99,3 +99,21 @@ URL déterministe : `http://127.0.0.1:4173/?e2e=1&temps=5000`.
 
 La branche produit `pistolet-tir-repos-1280x720.png`, `pistolet-tir-eclair-recul-1280x720.png`,
 `pistolet-tir-recuperation-1280x720.png` et `pistolet-tir.webm`.
+
+## Preuve des règles de pêche déterministes
+
+Scénario déterministe : ouvrir `/?e2e=1&presentation=regles-peche&graine=peche-mvp-v1`.
+Le harnais présente six lignes — Attente, Morsure, Prise, Trop tôt, Trop tard, Annulation — et
+cinq résultats (`prise`, `trop_tot`, `trop_tard`, `hors_zone`, `annulee`) dérivés de la graine.
+Le relecteur vérifie l’ordre des phases, les résultats attendus, l’absence d’erreur console et
+que le harnais n’apparaît pas dans la vue normale (`/?e2e=1`).
+
+Commande exacte :
+
+```bash
+pnpm test:e2e -- e2e/peche.spec.ts
+```
+
+URL déterministe : `http://127.0.0.1:4173/?e2e=1&presentation=regles-peche&graine=peche-mvp-v1`.
+
+La capture composite attendue est `docs/preuves/peche-regles-1280x720.png`.

@@ -100,7 +100,9 @@ describe('règles déterministes de pêche', () => {
 
     expect(releverPeche(ETAT_PECHE_INACTIF, 0)).toBe(ETAT_PECHE_INACTIF);
 
-    const milieu = lancer.lanceAuMs + lancer.delaiMorsureMs + Math.floor(lancer.fenetreMorsureMs / 2);
+    expect(lancer.delaiMorsureMs).toBeDefined();
+    expect(lancer.fenetreMorsureMs).toBeDefined();
+    const milieu = lancer.lanceAuMs + (lancer.delaiMorsureMs ?? 0) + Math.floor((lancer.fenetreMorsureMs ?? 0) / 2);
     const réussite = releverPeche(lancer, milieu);
     expect(réussite.resultat).toBe('prise');
     expect(releverPeche(réussite, milieu + 1)).toBe(réussite);
@@ -111,12 +113,13 @@ describe('règles déterministes de pêche', () => {
     const zone = zoneDeMonde(monde);
 
     const avantMorsure = lancerAvec(monde, zone, 20);
-    const annulationAttente = avancerPeche(avantMorsure, avantMorsure.delaiMorsureMs - 1);
+    expect(avantMorsure.delaiMorsureMs).toBeDefined();
+    const annulationAttente = avancerPeche(avantMorsure, (avantMorsure.delaiMorsureMs ?? 0) - 1);
     expect(annulerPeche(annulationAttente, annulationAttente.tempsCourantMs).resultat).toBe(
       'annulee',
     );
 
-    const dansMorsure = avancerPeche(avantMorsure, avantMorsure.delaiMorsureMs);
+    const dansMorsure = avancerPeche(avantMorsure, avantMorsure.delaiMorsureMs ?? 0);
     expect(dansMorsure.phase).toBe('morsure');
     expect(annulerPeche(dansMorsure, dansMorsure.tempsCourantMs).resultat).toBe('annulee');
   });
