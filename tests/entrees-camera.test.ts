@@ -127,6 +127,26 @@ describe('entrées sémantiques', () => {
     expect(entrees.lireEtat().avancer).toBe(false);
   });
 
+  it('met à jour les liaisons sans dupliquer les actions sémantiques', () => {
+    const { entrees, cible } = creerEntrees();
+
+    entrees.mettreAJourLiaisons({
+      ...LIAISONS_PAR_DEFAUT,
+      avancer: ['KeyZ'],
+    });
+
+    const toucheZ = cible.emettre('keydown', { code: 'KeyZ' });
+    expect(toucheZ.annule).toBe(true);
+    expect(entrees.lireEtat().avancer).toBe(true);
+    cible.emettre('keyup', { code: 'KeyZ' });
+    expect(entrees.lireEtat().avancer).toBe(false);
+
+    const toucheW = cible.emettre('keydown', { code: 'KeyW' });
+    expect(toucheW.annule).toBe(false);
+    expect(entrees.lireEtat().avancer).toBe(false);
+    entrees.detacher();
+  });
+
   it('traduit le bouton gauche et demande le verrouillage du pointeur', () => {
     const { entrees, cible, element } = creerEntrees();
 
