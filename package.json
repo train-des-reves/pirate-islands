@@ -18,6 +18,7 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@colyseus/sdk": "0.18.2",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.62.1",
     "@types/node": "24.13.3",

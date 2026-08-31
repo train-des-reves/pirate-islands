@@ -57,4 +57,3 @@ for (const vue of vues) {
     expect(erreursConsole).toEqual([]);
   });
 }
-

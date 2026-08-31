@@ -503,4 +503,3 @@ export function installerMarqueursE2E(
     conteneur.remove();
   };
 }
-

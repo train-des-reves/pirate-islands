@@ -45,3 +45,41 @@ E2E de verrouillage, avancer avec `W` jusqu'au mur brun, regarder avec la
 souris, puis appuyer sur `Échap`. Le relecteur vérifie le déplacement relatif,
 la caméra bornée, la collision qui bloque le joueur et la pause qui libère le
 pointeur. La vidéo correspondante est `entrees-camera.webm`.
+
+## Preuve de la salle multijoueur
+
+Commande et scénario déterministes :
+
+```bash
+pnpm test:e2e -- e2e/salle-jeu.spec.ts
+```
+
+Le scénario ouvre deux contextes Chromium isolés sur :
+
+```text
+http://127.0.0.1:4173/?e2e=1&diagnostic=salle&graine=mvp-defaut
+```
+
+Le premier contexte crée la salle ; le second la rejoint avec le paramètre
+`room` affiché par le premier. Le relecteur vérifie le même identifiant de salle,
+deux `sessionId` distincts et `Joueurs connectés : 2` dans les deux vues, puis
+`Joueurs connectés : 1` après la fermeture du second contexte. La capture
+composite attendue est `docs/preuves/salle-jeu-1280x720.png`.
+
+## Preuve visuelle — pistolet et intention de tir
+
+Scénario déterministe : ouvrir `/?e2e=1&temps=5000`, verrouiller le pointeur par le crochet E2E,
+tirer trois fois, vérifier les intentions `1`, `2`, `3` espacées de 150 ms, puis avancer l’horloge
+de 180 ms. Le relecteur vérifie le pistolet au repos, l’éclair et le recul pendant le tir, le
+compteur augmenté exactement trois fois, la direction normalisée et la récupération visuelle.
+
+Commande exacte :
+
+```bash
+pnpm exec playwright test e2e/entrees-camera.spec.ts --workers=1
+```
+
+URL déterministe : `http://127.0.0.1:4173/?e2e=1&temps=5000`.
+
+La branche produit `pistolet-tir-repos-1280x720.png`, `pistolet-tir-eclair-recul-1280x720.png`,
+`pistolet-tir-recuperation-1280x720.png` et `pistolet-tir.webm`.

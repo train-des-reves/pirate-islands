@@ -54,4 +54,3 @@ describe('cycle Babylon du bateau', () => {
     expect(scène.meshes.some((mesh) => mesh.name.startsWith('bateau-test'))).toBe(false);
   });
 });
-

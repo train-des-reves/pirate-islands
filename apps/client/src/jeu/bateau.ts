@@ -1092,4 +1092,3 @@ export function cameraBateau(
   camera.position.copyFrom(new Vector3(position.x, position.y, position.z));
   camera.setTarget(new Vector3(cible.x, cible.y, cible.z));
 }
-
