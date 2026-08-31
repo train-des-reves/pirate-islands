@@ -52,7 +52,7 @@ async function lireEtat(page: Page): Promise<EtatJeuE2E> {
 
 test('verrouille, déplace, regarde, bloque au mur et ouvre la pause', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/');
+  await page.goto('/?e2e=1');
   await expect(page.getByTestId('serveur-status')).toHaveText('Serveur joignable', {
     timeout: 10_000,
   });
@@ -105,7 +105,7 @@ test('verrouille, déplace, regarde, bloque au mur et ouvre la pause', async ({ 
 });
 
 test('ne capture pas une touche dans un contrôle DOM', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?e2e=1');
   await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
   await verifierCrochet(page);
   await appelerCrochet(page, 'reinitialiser');

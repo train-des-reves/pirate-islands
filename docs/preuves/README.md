@@ -40,8 +40,24 @@ d'apparition joueur. Les marqueurs ne sont présents qu'avec `e2e=1`.
 
 ## Preuve des entrées et de la caméra
 
-Scénario déterministe : ouvrir `/`, cliquer dans le canvas, activer le crochet
+Scénario déterministe : ouvrir `/?e2e=1`, cliquer dans le canvas, activer le crochet
 E2E de verrouillage, avancer avec `W` jusqu'au mur brun, regarder avec la
 souris, puis appuyer sur `Échap`. Le relecteur vérifie le déplacement relatif,
 la caméra bornée, la collision qui bloque le joueur et la pause qui libère le
 pointeur. La vidéo correspondante est `entrees-camera.webm`.
+
+## Preuve des réglages et du cookie
+
+Scénario déterministe : ouvrir /?e2e=1, verrouiller le pointeur, appuyer sur
+Échap, ouvrir les réglages, cocher l’inversion verticale, remplacer Avancer
+par Z, appliquer, recharger, puis avancer avec Z. Le relecteur vérifie le
+focus initial, Avancer : Z, Inverser la souris : Oui, la conservation après
+rechargement, l’absence de localStorage et le déplacement effectif avec Z.
+
+Commande exacte :
+
+pnpm exec playwright test e2e/reglages.spec.ts --config=playwright.config.ts
+
+URL : http://127.0.0.1:4173/?e2e=1
+
+La vidéo illustrative 1280×720 correspondante est reglages-cookie.webm.

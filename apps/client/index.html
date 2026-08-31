@@ -44,9 +44,153 @@
         </p>
       </aside>
       <div class="pause-overlay" data-testid="pause-overlay" hidden>
-        <section class="pause-card" role="dialog" aria-labelledby="titre-pause">
+        <section class="pause-card" role="dialog" aria-modal="true" aria-labelledby="titre-pause">
           <h2 id="titre-pause">Pause</h2>
-          <p>Le pointeur est libéré. Cliquez dans la scène pour reprendre.</p>
+          <p>Le pointeur est libéré. Reprenez la navigation ou ouvrez les réglages.</p>
+          <div class="pause-actions">
+            <button type="button" class="button button-primary" data-testid="reprendre-jeu">
+              Reprendre
+            </button>
+            <button type="button" class="button" data-testid="ouvrir-reglages">Réglages</button>
+          </div>
+        </section>
+      </div>
+      <div class="reglages-overlay" data-testid="reglages-overlay" hidden>
+        <section
+          class="reglages-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titre-reglages"
+          aria-describedby="description-reglages"
+        >
+          <header class="reglages-header">
+            <div>
+              <p class="reglages-kicker">Préférences locales</p>
+              <h2 id="titre-reglages">Réglages</h2>
+            </div>
+            <p id="description-reglages">
+              Les changements restent en brouillon jusqu’à Appliquer. Ils sont conservés dans votre
+              navigateur, sans donnée de session.
+            </p>
+          </header>
+          <div class="reglages-corps">
+            <fieldset class="reglages-fieldset">
+              <legend>Caméra</legend>
+              <label class="case-reglage" for="inversion-verticale">
+                <input id="inversion-verticale" type="checkbox" data-testid="inversion-verticale" />
+                <span>Inverser la souris verticalement</span>
+                <strong data-testid="etat-inversion">Non</strong>
+              </label>
+              <p class="aide-reglage">Ce réglage ne modifie que le tangage de la caméra.</p>
+            </fieldset>
+            <fieldset class="reglages-fieldset">
+              <legend>Touches</legend>
+              <p class="aide-reglage">Sélectionnez une action puis appuyez sur une touche.</p>
+              <div class="liste-reglages-touches">
+                <div class="ligne-reglage" data-reglage-action="avancer">
+                  <span id="libelle-avancer">Avancer</span>
+                  <button
+                    type="button"
+                    class="touche-reglage"
+                    data-testid="touche-avancer"
+                    aria-describedby="aide-avancer"
+                  >
+                    —
+                  </button>
+                  <span class="sr-only" id="aide-avancer">Capturer la touche pour Avancer</span>
+                </div>
+                <div class="ligne-reglage" data-reglage-action="reculer">
+                  <span id="libelle-reculer">Reculer</span>
+                  <button
+                    type="button"
+                    class="touche-reglage"
+                    data-testid="touche-reculer"
+                    aria-describedby="aide-reculer"
+                  >
+                    —
+                  </button>
+                  <span class="sr-only" id="aide-reculer">Capturer la touche pour Reculer</span>
+                </div>
+                <div class="ligne-reglage" data-reglage-action="gauche">
+                  <span id="libelle-gauche">Gauche</span>
+                  <button
+                    type="button"
+                    class="touche-reglage"
+                    data-testid="touche-gauche"
+                    aria-describedby="aide-gauche"
+                  >
+                    —
+                  </button>
+                  <span class="sr-only" id="aide-gauche">Capturer la touche pour Gauche</span>
+                </div>
+                <div class="ligne-reglage" data-reglage-action="droite">
+                  <span id="libelle-droite">Droite</span>
+                  <button
+                    type="button"
+                    class="touche-reglage"
+                    data-testid="touche-droite"
+                    aria-describedby="aide-droite"
+                  >
+                    —
+                  </button>
+                  <span class="sr-only" id="aide-droite">Capturer la touche pour Droite</span>
+                </div>
+                <div class="ligne-reglage" data-reglage-action="interagir">
+                  <span id="libelle-interagir">Interagir</span>
+                  <button
+                    type="button"
+                    class="touche-reglage"
+                    data-testid="touche-interagir"
+                    aria-describedby="aide-interagir"
+                  >
+                    —
+                  </button>
+                  <span class="sr-only" id="aide-interagir">Capturer la touche pour Interagir</span>
+                </div>
+                <div class="ligne-reglage" data-reglage-action="tirer">
+                  <span id="libelle-tirer">Tirer</span>
+                  <button
+                    type="button"
+                    class="touche-reglage"
+                    data-testid="touche-tirer"
+                    aria-describedby="aide-tirer"
+                  >
+                    —
+                  </button>
+                  <span class="sr-only" id="aide-tirer">Capturer la touche pour Tirer</span>
+                </div>
+                <div class="ligne-reglage" data-reglage-action="pause">
+                  <span id="libelle-pause">Pause</span>
+                  <button
+                    type="button"
+                    class="touche-reglage"
+                    data-testid="touche-pause"
+                    aria-describedby="aide-pause"
+                  >
+                    —
+                  </button>
+                  <span class="sr-only" id="aide-pause">Capturer la touche pour Pause</span>
+                </div>
+              </div>
+            </fieldset>
+            <p
+              class="reglages-message"
+              data-testid="reglages-message"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </div>
+          <footer class="reglages-actions">
+            <button type="button" class="button button-quiet" data-testid="reinitialiser-reglages">
+              Réinitialiser
+            </button>
+            <span class="reglages-actions-principales">
+              <button type="button" class="button" data-testid="annuler-reglages">Annuler</button>
+              <button type="button" class="button button-primary" data-testid="appliquer-reglages">
+                Appliquer
+              </button>
+            </span>
+          </footer>
         </section>
       </div>
       <p class="coordinates" aria-hidden="true">X · Y · Z &nbsp;|&nbsp; 1280 × 720</p>
