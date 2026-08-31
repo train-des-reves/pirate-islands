@@ -9,6 +9,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173"
   },
   "dependencies": {
+    "@colyseus/sdk": "0.18.2",
     "@pirate/coeur-jeu": "workspace:*",
     "@pirate/protocole": "workspace:*",
     "babylonjs": "9.23.0"
