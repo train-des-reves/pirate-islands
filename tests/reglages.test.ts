@@ -90,6 +90,47 @@ describe('codec et cookie des réglages', () => {
     ).toEqual(REGLAGES_PAR_DEFAUT);
   });
 
+  it('rejette les clés inconnues à la racine et dans les liaisons', () => {
+    const objetCookie = {
+      v: VERSION_REGLAGES,
+      inversionVerticale: false,
+      liaisons: REGLAGES_PAR_DEFAUT.liaisons,
+    };
+    const encoderObjet = (objet: unknown) => encodeURIComponent(JSON.stringify(objet));
+    const cookie = (objet: unknown) => NOM_COOKIE_REGLAGES + '=' + encoderObjet(objet);
+
+    expect(decoderReglages(encoderObjet({ ...objetCookie, optionInconnue: true }))).toBeUndefined();
+    expect(
+      decoderReglages(
+        encoderObjet({
+          ...objetCookie,
+          liaisons: { ...objetCookie.liaisons, optionInconnue: ['KeyR'] },
+        }),
+      ),
+    ).toBeUndefined();
+    expect(chargerReglagesDepuisCookie(cookie({ ...objetCookie, optionInconnue: true }))).toEqual(
+      REGLAGES_PAR_DEFAUT,
+    );
+    expect(
+      chargerReglagesDepuisCookie(
+        cookie({
+          ...objetCookie,
+          liaisons: { ...objetCookie.liaisons, optionInconnue: ['KeyR'] },
+        }),
+      ),
+    ).toEqual(REGLAGES_PAR_DEFAUT);
+
+    expect(validerReglages({ ...REGLAGES_PAR_DEFAUT, optionInconnue: true }).erreurs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'structure' })]),
+    );
+    expect(
+      validerReglages({
+        ...REGLAGES_PAR_DEFAUT,
+        liaisons: { ...REGLAGES_PAR_DEFAUT.liaisons, optionInconnue: ['KeyR'] },
+      }).erreurs,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'structure' })]));
+  });
+
   it('revient aux défauts si le cookie est absent, invalide ou dupliqué', () => {
     const cookieValide = construireCookieReglages(REGLAGES_PAR_DEFAUT);
     const valeur = cookieValide.slice(cookieValide.indexOf('=') + 1).split(';', 1)[0];

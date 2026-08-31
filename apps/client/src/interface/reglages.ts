@@ -84,6 +84,9 @@ interface ObjetCookieReglages {
   readonly liaisons: unknown;
 }
 
+const CLES_REGLAGES = ['inversionVerticale', 'liaisons'] as const;
+const CLES_COOKIE_REGLAGES = ['v', ...CLES_REGLAGES] as const;
+
 const NOMS_ACTIONS = {
   avancer: 'Avancer',
   reculer: 'Reculer',
@@ -136,6 +139,17 @@ function creerErreur(
 
 function estObjet(valeur: unknown): valeur is Record<string, unknown> {
   return typeof valeur === 'object' && valeur !== null;
+}
+
+function possèdeExactementLesClés(
+  objet: Record<string, unknown>,
+  clésAttendues: readonly string[],
+): boolean {
+  const clésPrésentes = Object.keys(objet);
+  return (
+    clésPrésentes.length === clésAttendues.length &&
+    clésPrésentes.every((clé) => clésAttendues.includes(clé))
+  );
 }
 
 function estCodeReconnu(code: string): boolean {
@@ -264,6 +278,10 @@ export function validerReglages(reglages: unknown): ValidationReglages {
     };
   }
 
+  if (!possèdeExactementLesClés(reglages, CLES_REGLAGES)) {
+    erreurs.push(creerErreur('structure', 'La structure des réglages contient une clé inconnue.'));
+  }
+
   if (typeof reglages.inversionVerticale !== 'boolean') {
     erreurs.push(creerErreur('structure', 'L’inversion verticale doit être un booléen.'));
   }
@@ -274,6 +292,9 @@ export function validerReglages(reglages: unknown): ValidationReglages {
   }
 
   const liaisons = reglages.liaisons;
+  if (!possèdeExactementLesClés(liaisons, ACTIONS_JEU)) {
+    erreurs.push(creerErreur('structure', 'Les liaisons contiennent une action inconnue.'));
+  }
   const liaisonsValidees = {} as Partial<Record<ActionJeu, readonly string[]>>;
   for (const action of ACTIONS_JEU) {
     const valeurs = liaisons[action];
@@ -349,6 +370,9 @@ export function decoderReglages(valeur: string): ReglagesJeu | undefined {
   try {
     const decodé: unknown = JSON.parse(decodeURIComponent(valeur));
     if (!estObjet(decodé)) {
+      return undefined;
+    }
+    if (!possèdeExactementLesClés(decodé, CLES_COOKIE_REGLAGES)) {
       return undefined;
     }
     const objet = decodé as unknown as ObjetCookieReglages;
