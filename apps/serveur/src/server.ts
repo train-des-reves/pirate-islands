@@ -4,7 +4,9 @@ import { Server as ServeurColyseus } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import type { Request, Response } from 'express';
 
-import { creerReponseSante } from '@pirate/protocole';
+import { creerReponseSante, NOM_SALLE_JEU } from '@pirate/protocole';
+
+import { SalleJeu } from './salles/salle-jeu.js';
 
 export interface OptionsServeur {
   readonly host?: string;
@@ -41,6 +43,8 @@ export async function démarrerServeur(options: OptionsServeur = {}): Promise<Se
     greet: false,
     transport,
   });
+
+  colyseus.define(NOM_SALLE_JEU, SalleJeu);
 
   await colyseus.listen(port, host);
 

@@ -45,3 +45,23 @@ E2E de verrouillage, avancer avec `W` jusqu'au mur brun, regarder avec la
 souris, puis appuyer sur `Échap`. Le relecteur vérifie le déplacement relatif,
 la caméra bornée, la collision qui bloque le joueur et la pause qui libère le
 pointeur. La vidéo correspondante est `entrees-camera.webm`.
+
+## Preuve de la salle multijoueur
+
+Commande et scénario déterministes :
+
+```bash
+pnpm test:e2e -- e2e/salle-jeu.spec.ts
+```
+
+Le scénario ouvre deux contextes Chromium isolés sur :
+
+```text
+http://127.0.0.1:4173/?e2e=1&diagnostic=salle&graine=mvp-defaut
+```
+
+Le premier contexte crée la salle ; le second la rejoint avec le paramètre
+`room` affiché par le premier. Le relecteur vérifie le même identifiant de salle,
+deux `sessionId` distincts et `Joueurs connectés : 2` dans les deux vues, puis
+`Joueurs connectés : 1` après la fermeture du second contexte. La capture
+composite attendue est `docs/preuves/salle-jeu-1280x720.png`.
