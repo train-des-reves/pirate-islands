@@ -14,6 +14,7 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 
 - Les premières relances ont utilisé le worktree principal en `HEAD` détachée, avec une modification étrangère de `AGENTS.md`. Les exécuteurs ont refusé d’écrire pour préserver l’isolation.
 - L’ancien worktree #4 (`2acb`) contient encore des changements non publiés ; il n’a pas été nettoyé ni déplacé.
+- Le worktree #9 a rencontré le même verrou Git partagé (`C:/dev/pirate-islands/.git/worktrees/pirate-islands5/index.lock`) hors zone d’écriture au moment du commit ; les deux fichiers du correctif et toutes les barrières sont prêts, et une relance escaladée ciblée est autorisée.
 - Solution : créer des tâches Codex avec worktrees dédiés et branches attachées : #3 dans `25a9`, #4 dans `9db6`. Les exécuteurs suivants ont travaillé sur les branches d’issue propres sans toucher à `2acb`.
 
 ### GitHub CLI et dépôt cible
@@ -47,9 +48,9 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 | Revue PR #22 | Archivée après fusion | Terra `medium` a d’abord demandé les corrections collision/seuil et le diagnostic E2E ; recontrôle final FAVORABLE sur `303a7ef`, CI #18 verte, preuves release et absence de conflit. |
 | Revue PR #23 | Archivée après fusion | Verdict Terra `medium` favorable, avec un point P2 d’accessibilité hors blocage ; tâche archivée après fusion. |
 | PR #24 documentation | Fusionnée — suivi terminé | Head `626910f`, release `mvp-docs-pr24-preuve-626910f`, CI #20 verte et verdict Terra FAVORABLE ; fusion `d096f50`, issue #25 fermée, reviewer archivé. |
-| PR #26 acteur pirate | Ouverte — go exécuteur attendu | Head `869f316`, CI `33391934291` verte, release `mvp-2f-pr8-preuve-869f316` vérifiée, reviewer Terra FAVORABLE ; l’exécuteur #8 doit encore transmettre l’`Entrée en revue` et le `Go final` formels selon le nouveau protocole. |
+| PR #26 acteur pirate | Ouverte — resynchronisation requise | Head `869f316`, CI `33391934291` verte et reviewer Terra FAVORABLE sur ce head, mais après la fusion de #27 GitHub indique `CONFLICTING/DIRTY` contre `main=cfa0d654`; le `Go final` précédent est invalidé. #8 doit fusionner `origin/main`, résoudre, revalider puis renvoyer un go. |
 | PR #27 pistolet | Fusionnée — suivi à archiver | Head `65ce1b4`, CI `33392373483` verte, revue Terra APPROUVABLE, fusion GitHub `cfa0d654`, issue #6 fermée ; l’archivage de l’exécuteur/reviewer reste à effectuer. |
-| PR #28 réglages | Ouverte — correction en revue | Head `9890514`, CI `33393655971` verte et PR CLEAN ; Terra demande le rejet strict des champs inconnus du cookie à la racine et dans `liaisons`, avec tests de régression. #9 a envoyé son `Entrée en revue` et corrige uniquement les deux fichiers ciblés ; pas de go final. |
+| PR #28 réglages | Ouverte — correction prête, commit bloqué | Head `9890514`, CI `33393655971` verte et PR CLEAN ; Terra demande le rejet strict des champs inconnus du cookie à la racine et dans `liaisons`, avec tests de régression. #9 a envoyé son `Entrée en revue`, les barrières passent et le diff est limité aux deux fichiers, mais le commit/push est bloqué par `index.lock` hors zone d’écriture ; pas de go final. |
 | PR #29 salle Colyseus | Ouverte — correction en revue | Head `ae1a64c`, CI `33393144041` verte mais PR CONFLICTING/DIRTY ; Terra demande une resynchronisation avec `origin/main` et l’isolation des changements hors périmètre (`AGENTS.md`, décision monde, E2E monde, baseline, configuration, findings). #2 a envoyé son `Entrée en revue` et traite ces findings ; pas de go final. |
 | PR #30 bateau | Ouverte — CI rouge | Head `7adf297`, CI `33396133967` échoue sur la baseline monde historique ; les trois tests bateau passent. Aucun reviewer ni go final avant correction et CI verte. |
 
