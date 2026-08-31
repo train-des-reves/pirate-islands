@@ -1123,8 +1123,15 @@ export function construireGalerieBateauxPiratesE2E(
         }
       }
 
+      // Quand la pose est figée (capture E2E déterministe), on force
+      // l'interpolation à converger immédiatement vers la cible : alpha = 1
+      // dès la première frame. La pose affichée ne dépend donc ni du nombre de
+      // frames rendues ni de l'horloge réelle, ce qui rend la capture
+      // identique quelle que soit la machine.
+      const deltaEffectif =
+        options.figerPose === true ? DUREE_INTERPOLATION_BATEAU_PIRATE : delta;
       for (const acteur of acteurs) {
-        acteur.mettreAJour(delta);
+        acteur.mettreAJour(deltaEffectif);
       }
     },
     liberer: () => {
