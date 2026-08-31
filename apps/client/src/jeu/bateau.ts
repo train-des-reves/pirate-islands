@@ -134,9 +134,9 @@ function tournerPoint(point: PointBateau, rotationY: number): PointBateau {
   const cosinus = Math.cos(rotationY);
   const sinus = Math.sin(rotationY);
   return {
-    x: point.x * cosinus - point.z * sinus,
+    x: point.x * cosinus + point.z * sinus,
     y: point.y,
-    z: point.x * sinus + point.z * cosinus,
+    z: -point.x * sinus + point.z * cosinus,
   };
 }
 
@@ -1074,8 +1074,8 @@ export function cameraBateau(
       cible: { x: 0, y: 2.8, z: -0.85 },
     },
     'bateau-cale': {
-      position: { x: 0, y: 3.5, z: -4.2 },
-      cible: { x: 0, y: 1.05, z: -2.2 },
+      position: { x: 0.0, y: 1.85, z: -2.42 },
+      cible: { x: 0.0, y: 0.35, z: -3.95 },
     },
   };
   const configuration = configurations[mode];

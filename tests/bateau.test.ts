@@ -68,6 +68,9 @@ describe('contrat du bateau de pêche', () => {
       expect.arrayContaining(['pont', 'cabine', 'cale', 'escalier']),
     );
     expect(bateau.collisions.length).toBeGreaterThan(bateau.surfaces.length);
+    expect(bateau.collisions.map((collision) => collision.niveau)).toEqual(
+      expect.arrayContaining(['coque', 'cabine', 'cale', 'toit']),
+    );
 
     const volumes = [...bateau.surfaces, ...bateau.collisions];
     expect(new Set(volumes.map((volume) => volume.id)).size).toBe(volumes.length);
