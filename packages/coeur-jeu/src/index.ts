@@ -23,3 +23,6 @@ export function creerPoint3D(x: number, y: number, z: number): Point3D {
 }
 
 export * from './monde.js';
+export * from './aleatoire.js';
+export * from './ia-pirate.js';
+export * from './simulation-pirate.js';
