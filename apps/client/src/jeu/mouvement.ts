@@ -34,6 +34,8 @@ export const VITESSE_JOUEUR_PAR_DEFAUT = 4;
 export const GRAVITE_PAR_DEFAUT = -18;
 export const RAYON_JOUEUR_PAR_DEFAUT = 0.42;
 export const HAUTEUR_JOUEUR_PAR_DEFAUT = 1.8;
+export const PAS_SIMULATION_JOUEUR = 0.05;
+export const DELTA_MAXIMUM_SIMULATION_JOUEUR = 0.25;
 
 export function creerMondeCollision(
   murs: readonly BoiteCollision[] = [],
@@ -146,6 +148,37 @@ export function simulerMouvementJoueur(
 }
 
 export const appliquerMouvementJoueur = simulerMouvementJoueur;
+
+export function simulerMouvementParPasFixes(
+  etat: EtatJoueur,
+  actions: Pick<EtatActions, 'avancer' | 'reculer' | 'gauche' | 'droite'>,
+  lacet: number,
+  deltaSecondes: number,
+  monde: MondeCollision,
+  accumulation = 0,
+  vitesse = VITESSE_JOUEUR_PAR_DEFAUT,
+): { readonly etat: EtatJoueur; readonly accumulation: number } {
+  const delta = Number.isFinite(deltaSecondes) ? Math.max(0, deltaSecondes) : 0;
+  let tempsAccumule = Number.isFinite(accumulation)
+    ? Math.min(DELTA_MAXIMUM_SIMULATION_JOUEUR, Math.max(0, accumulation))
+    : 0;
+  tempsAccumule += Math.min(DELTA_MAXIMUM_SIMULATION_JOUEUR, delta);
+
+  let nouvelEtat = etat;
+  while (tempsAccumule >= PAS_SIMULATION_JOUEUR) {
+    nouvelEtat = simulerMouvementJoueur(
+      nouvelEtat,
+      actions,
+      lacet,
+      PAS_SIMULATION_JOUEUR,
+      monde,
+      vitesse,
+    );
+    tempsAccumule -= PAS_SIMULATION_JOUEUR;
+  }
+
+  return { etat: nouvelEtat, accumulation: tempsAccumule };
+}
 
 function resoudreAxe(
   position: number,

@@ -1,8 +1,8 @@
 # Pirate Islands
 
 Fondation exécutable et testable du jeu navigateur Pirate Islands. Le client contient maintenant
-un bac à sable première personne : les actions sémantiques pilotent le déplacement, le regard et
-les collisions locales sans exposer les touches brutes au gameplay.
+un monde déterministe et un bac à sable première personne : les actions sémantiques pilotent le
+déplacement, le regard et les collisions locales sans exposer les touches brutes au gameplay.
 
 ## Démarrage rapide
 
@@ -48,12 +48,22 @@ Les mêmes actions fonctionnent sur les claviers français et QWERTY :
 Un clic dans la scène verrouille le pointeur. La souris regarde autour du joueur, le déplacement
 reste relatif à son lacet et `Échap` libère le pointeur en ouvrant la pause.
 
+## Monde déterministe
+
+Les URLs qui fournissent `graine` ou `camera` affichent l'océan et les trois îles produites par
+`genererMonde('mvp-defaut')`. La vue d'ensemble E2E est disponible à
+`http://127.0.0.1:4173/?e2e=1&graine=mvp-defaut&camera=ensemble` et la vue rivage à
+`http://127.0.0.1:4173/?e2e=1&graine=mvp-defaut&camera=rivage`.
+
+Le profil de relief partagé par `@pirate/coeur-jeu` et Babylon aligne la collision logique sur la
+pente visible ; les apparitions joueur et pirates sont validées sur cette surface locale.
+
 ## Organisation
 
 - `apps/client` : client Vite, scène Babylon.js, entrées sémantiques et bac à sable première personne.
 - `apps/serveur` : serveur HTTP Node.js, Colyseus et route `/health`.
 - `packages/protocole` : contrats JSON partagés.
-- `packages/coeur-jeu` : axes, unités et types du monde de jeu.
+- `packages/coeur-jeu` : axes, unités, génération déterministe et types du monde de jeu.
 - `packages/support-tests` : assertions partagées pour les tests.
 - `docs/decisions` : décisions techniques durables.
 
@@ -63,5 +73,5 @@ reste relatif à son lacet et `Échap` libère le pointeur en ouvrant la pause.
 pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e
 ```
 
-La preuve visuelle du parcours première personne est conservée dans `docs/preuves/` après
-l'exécution du test Chromium.
+Les preuves visuelles du monde déterministe et du parcours première personne sont conservées dans
+`docs/preuves/` après l'exécution du test Chromium.
