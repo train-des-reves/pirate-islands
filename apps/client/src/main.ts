@@ -1,64 +1,321 @@
-import { Engine, Scene } from 'babylonjs';
+import {
+  Color3,
+  Color4,
+  Engine,
+  FreeCamera,
+  HemisphericLight,
+  MeshBuilder,
+  Scene,
+  StandardMaterial,
+  Vector3,
+} from 'babylonjs';
 
 import { GRAINE_MVP_PAR_DEFAUT, genererMonde } from '@pirate/coeur-jeu';
 import { estReponseSante } from '@pirate/protocole';
 
+import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
+import { creerEtatActions, GestionnaireEntrees } from './jeu/entrees';
+import { construireBacASable } from './jeu/monde-test';
+import { creerEtatJoueur, simulerMouvementJoueur, type EtatJoueur } from './jeu/mouvement';
 import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
+
 import './style.css';
 
 const LARGEUR_REFERENCE = 1280;
 const HAUTEUR_REFERENCE = 720;
+const HAUTEUR_YEUX = 1.62;
+const POSITION_DEPART = { x: 0, y: 0, z: -6.5 } as const;
+
 const canvas = document.querySelector<HTMLCanvasElement>('#scene-canvas');
 const application = document.querySelector<HTMLElement>('#app');
 const indicateurServeur = document.querySelector<HTMLElement>('[data-testid="serveur-status"]');
+const calquePause = document.querySelector<HTMLElement>('[data-testid="pause-overlay"]');
+const diagnostic = document.querySelector<HTMLElement>('[data-testid="diagnostic-jeu"]');
+const etatPointeur = document.querySelector<HTMLElement>('[data-testid="etat-pointeur"]');
 
-if (!canvas || !application || !indicateurServeur) {
+if (!canvas || !application || !indicateurServeur || !calquePause || !diagnostic || !etatPointeur) {
   throw new Error('La structure de la page Pirate Islands est incomplète.');
 }
 
 const canvasJeu = canvas;
 const conteneurApplication = application;
 const statutServeur = indicateurServeur;
+const overlayPause = calquePause;
+const diagnosticJeu = diagnostic;
+const indicateurPointeur = etatPointeur;
+
+interface EtatJeuE2E {
+  readonly position: { readonly x: number; readonly y: number; readonly z: number };
+  readonly camera: EtatRegard;
+  readonly pause: boolean;
+  readonly pointeurVerrouille: boolean;
+  readonly collision: EtatJoueur['collision'];
+}
+
+declare global {
+  interface Window {
+    __pirateIslandsE2E?: {
+      verrouillerPointeur: () => void;
+      libererPointeur: () => void;
+      lireEtat: () => EtatJeuE2E;
+      reinitialiser: () => void;
+    };
+  }
+}
+
+interface JeuClient {
+  readonly moteur: Engine;
+  detruire: () => void;
+}
 
 const paramètres = new URLSearchParams(window.location.search);
 const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
-const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
+const modeMonde = paramètres.has('graine') || paramètres.has('camera');
+const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
+conteneurApplication.dataset.mode = modeMonde ? 'monde' : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
 conteneurApplication.dataset.iles = String(monde.iles.length);
-conteneurApplication.dataset.diagnostics = modeE2E ? 'actifs' : 'inactifs';
+conteneurApplication.dataset.diagnostics = modeMonde && modeE2E ? 'actifs' : 'inactifs';
+conteneurApplication.dataset.pause = 'non';
+conteneurApplication.dataset.pointeur = 'libere';
+conteneurApplication.dataset.collision = 'aucune';
+
+if (!modeMonde) {
+  document
+    .querySelector<HTMLElement>('.eyebrow')
+    ?.replaceChildren('Navigation première personne · MVP-1C');
+  document
+    .querySelector<HTMLElement>('.tagline')
+    ?.replaceChildren('Cliquez dans la scène pour prendre la barre et explorer le bac à sable.');
+}
 
 canvasJeu.width = LARGEUR_REFERENCE;
 canvasJeu.height = HAUTEUR_REFERENCE;
 
-function construireScene(): Engine | undefined {
+function construireScene(): JeuClient | undefined {
   try {
     const moteur = new Engine(canvasJeu, true, {
       preserveDrawingBuffer: true,
       stencil: true,
     });
     const scene = new Scene(moteur);
-    const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
-    if (modeE2E) {
-      installerMarqueursE2E(scene, monde, mondeBabylon.camera);
+
+    if (modeMonde) {
+      const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
+      const retirerMarqueurs = modeE2E
+        ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
+        : undefined;
+
+      scene.executeWhenReady(() => {
+        conteneurApplication.dataset.scene = 'ready';
+      });
+      const boucle = (): void => scene.render();
+      moteur.runRenderLoop(boucle);
+      const redimensionner = (): void => moteur.resize();
+      window.addEventListener('resize', redimensionner);
+
+      return {
+        moteur,
+        detruire: () => {
+          retirerMarqueurs?.();
+          window.removeEventListener('resize', redimensionner);
+          moteur.stopRenderLoop(boucle);
+          mondeBabylon.liberer();
+          moteur.dispose();
+        },
+      };
     }
 
+    scene.clearColor = new Color4(0.34, 0.67, 0.8, 1);
+    scene.fogMode = Scene.FOGMODE_EXP2;
+    scene.fogColor = new Color3(0.34, 0.67, 0.8);
+    scene.fogDensity = 0.008;
+
+    const cameraBabylon = new FreeCamera(
+      'camera-premiere-personne',
+      new Vector3(0, HAUTEUR_YEUX, -6.5),
+      scene,
+    );
+    cameraBabylon.minZ = 0.08;
+    cameraBabylon.maxZ = 1000;
+    cameraBabylon.fov = 1.05;
+    cameraBabylon.inertia = 0;
+    cameraBabylon.checkCollisions = false;
+    cameraBabylon.applyGravity = false;
+    cameraBabylon.rotationQuaternion = null;
+    cameraBabylon.rotation.set(0, 0, 0);
+
+    const lumière = new HemisphericLight('lumiere-ciel', new Vector3(0, 1, 0), scene);
+    lumière.intensity = 1.1;
+    lumière.diffuse = new Color3(0.9, 0.95, 1);
+    lumière.groundColor = new Color3(0.12, 0.05, 0.03);
+
+    const ciel = MeshBuilder.CreateBox('ciel', { size: 200 }, scene);
+    ciel.isPickable = false;
+    ciel.infiniteDistance = true;
+    const materiauCiel = new StandardMaterial('materiau-ciel', scene);
+    materiauCiel.backFaceCulling = false;
+    materiauCiel.disableLighting = true;
+    materiauCiel.emissiveColor = new Color3(0.16, 0.42, 0.64);
+    ciel.material = materiauCiel;
+
+    const mondeBac = construireBacASable(scene);
+    let joueur = creerEtatJoueur(POSITION_DEPART);
+    let enPause = false;
+    let dernierEtatEntrees = creerEtatActions();
+    let derniereCollision: EtatJoueur['collision'] = 'aucune';
+
+    const mettreEnPause = (): void => {
+      enPause = true;
+      actualiserInterface();
+    };
+
+    const reprendreJeu = (verrouille: boolean): void => {
+      if (verrouille) {
+        enPause = false;
+        actualiserInterface();
+      }
+    };
+
+    const entrees = new GestionnaireEntrees({
+      cible: window,
+      document: window.document,
+      elementVerrouillage: canvasJeu,
+      onPause: mettreEnPause,
+      onChangementVerrouillage: reprendreJeu,
+    });
+    const camera = new CameraPremierePersonne(cameraBabylon, {
+      // Le réglage réel sera injecté par l'issue des préférences; le défaut
+      // produit reste non inversé sans ajouter d'interface hors périmètre.
+      inversionVerticale: () => false,
+    });
+
+    const lireEtat = (): EtatJeuE2E => ({
+      position: { ...joueur.position },
+      camera: camera.obtenirEtat(),
+      pause: enPause,
+      pointeurVerrouille: entrees.estPointeurVerrouille(),
+      collision: derniereCollision,
+    });
+
+    const actualiserInterface = (): void => {
+      const etat = lireEtat();
+      conteneurApplication.dataset.pause = etat.pause ? 'oui' : 'non';
+      conteneurApplication.dataset.pointeur = etat.pointeurVerrouille ? 'verrouille' : 'libere';
+      conteneurApplication.dataset.collision = etat.collision;
+      overlayPause.hidden = !etat.pause;
+      indicateurPointeur.textContent = etat.pointeurVerrouille
+        ? 'Pointeur verrouillé · Échap pour la pause'
+        : etat.pause
+          ? 'Jeu en pause · cliquez dans la scène pour reprendre'
+          : 'Cliquez dans la scène pour verrouiller le pointeur';
+      diagnosticJeu.dataset.positionX = etat.position.x.toFixed(3);
+      diagnosticJeu.dataset.positionY = etat.position.y.toFixed(3);
+      diagnosticJeu.dataset.positionZ = etat.position.z.toFixed(3);
+      diagnosticJeu.dataset.lacet = etat.camera.lacet.toFixed(3);
+      diagnosticJeu.dataset.tangage = etat.camera.tangage.toFixed(3);
+      diagnosticJeu.dataset.collision = etat.collision;
+      diagnosticJeu.textContent = `Position ${etat.position.x.toFixed(1)} · ${etat.position.y.toFixed(1)} · ${etat.position.z.toFixed(1)}`;
+    };
+
+    const crochetE2E = (): void => {
+      if (import.meta.env.VITE_E2E !== '1') {
+        return;
+      }
+
+      window.__pirateIslandsE2E = {
+        verrouillerPointeur: () => entrees.simulerVerrouillage(true),
+        libererPointeur: () => entrees.simulerVerrouillage(false),
+        lireEtat,
+        reinitialiser: () => {
+          entrees.reinitialiserEtat();
+          joueur = creerEtatJoueur(POSITION_DEPART);
+          camera.reinitialiser();
+          camera.synchroniserPosition({
+            x: POSITION_DEPART.x,
+            y: POSITION_DEPART.y + HAUTEUR_YEUX,
+            z: POSITION_DEPART.z,
+          });
+          enPause = false;
+          derniereCollision = 'aucune';
+          actualiserInterface();
+        },
+      };
+    };
+
+    entrees.attacher();
+    camera.synchroniserPosition({
+      x: POSITION_DEPART.x,
+      y: POSITION_DEPART.y + HAUTEUR_YEUX,
+      z: POSITION_DEPART.z,
+    });
+    crochetE2E();
+    actualiserInterface();
+
+    let dernierTemps = performance.now();
+    const boucle = (): void => {
+      const maintenant = performance.now();
+      const deltaSecondes = Math.min(0.05, Math.max(0, (maintenant - dernierTemps) / 1000));
+      dernierTemps = maintenant;
+      dernierEtatEntrees = entrees.lireEtat();
+
+      if (dernierEtatEntrees.pause) {
+        mettreEnPause();
+      }
+
+      if (!enPause && dernierEtatEntrees.pointeurVerrouille) {
+        camera.regarder(dernierEtatEntrees.regardX, dernierEtatEntrees.regardY);
+        joueur = simulerMouvementJoueur(
+          joueur,
+          dernierEtatEntrees,
+          camera.obtenirEtat().lacet,
+          deltaSecondes,
+          mondeBac,
+        );
+        if (joueur.collision !== 'aucune') {
+          derniereCollision = joueur.collision;
+        }
+        camera.synchroniserPosition({
+          x: joueur.position.x,
+          y: joueur.position.y + HAUTEUR_YEUX,
+          z: joueur.position.z,
+        });
+      }
+
+      actualiserInterface();
+      scene.render();
+    };
+
+    moteur.runRenderLoop(boucle);
+    const redimensionner = (): void => moteur.resize();
+    window.addEventListener('resize', redimensionner);
     scene.executeWhenReady(() => {
       conteneurApplication.dataset.scene = 'ready';
     });
-    moteur.runRenderLoop(() => scene.render());
-    window.addEventListener('resize', () => moteur.resize());
-    return moteur;
+
+    const jeu: JeuClient = {
+      moteur,
+      detruire: () => {
+        entrees.detacher();
+        window.removeEventListener('resize', redimensionner);
+        moteur.stopRenderLoop(boucle);
+        moteur.dispose();
+        delete window.__pirateIslandsE2E;
+      },
+    };
+    window.addEventListener('pagehide', jeu.detruire, { once: true });
+    return jeu;
   } catch {
     conteneurApplication.dataset.scene = 'fallback';
     return undefined;
   }
 }
 
-construireScene();
+const jeu = construireScene();
 
 async function vérifierServeur(): Promise<void> {
   const urlServeur = import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567';
@@ -83,4 +340,5 @@ async function vérifierServeur(): Promise<void> {
   }
 }
 
+void jeu;
 void vérifierServeur();

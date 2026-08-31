@@ -5,23 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Monde déterministe de Pirate Islands : un océan et trois îles procédurales."
+      content="Monde déterministe et navigation première personne de Pirate Islands."
     />
-    <title>Pirate Islands — Monde déterministe</title>
+    <title>Pirate Islands — Monde et navigation</title>
   </head>
   <body>
-    <main id="app" class="scene-shell" data-scene="loading">
-      <canvas id="scene-canvas" aria-label="Scène 3D représentant un océan et trois îles"></canvas>
+    <main
+      id="app"
+      class="scene-shell"
+      data-mode="monde"
+      data-scene="loading"
+      data-pause="non"
+      data-pointeur="libere"
+    >
+      <canvas
+        id="scene-canvas"
+        aria-label="Scène 3D représentant un océan, trois îles et le bac à sable"
+      ></canvas>
       <div class="halo" aria-hidden="true"></div>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="crosshair" aria-hidden="true"></div>
       <section class="interface" aria-labelledby="titre-jeu">
         <p class="eyebrow">Monde ensemencé · Cap 002</p>
         <h1 id="titre-jeu" data-testid="titre-jeu">Pirate Islands</h1>
         <p class="tagline">Trois îles, un océan et une route stable pour chaque expédition.</p>
+        <p class="controls">
+          ZQSD / WASD pour avancer · souris pour regarder · Échap pour la pause
+        </p>
         <p class="status" data-testid="serveur-status" data-etat="verification">
           <span class="status-dot" aria-hidden="true"></span>
           Vérification du serveur…
         </p>
       </section>
+      <aside class="ath" aria-live="polite">
+        <p data-testid="etat-pointeur">Cliquez dans la scène pour verrouiller le pointeur</p>
+        <p data-testid="diagnostic-jeu" data-position-x="0" data-position-y="0" data-position-z="0">
+          Position 0.0 · 0.0 · 0.0
+        </p>
+      </aside>
+      <div class="pause-overlay" data-testid="pause-overlay" hidden>
+        <section class="pause-card" role="dialog" aria-labelledby="titre-pause">
+          <h2 id="titre-pause">Pause</h2>
+          <p>Le pointeur est libéré. Cliquez dans la scène pour reprendre.</p>
+        </section>
+      </div>
       <p class="coordinates" aria-hidden="true">X · Y · Z &nbsp;|&nbsp; 1280 × 720</p>
     </main>
     <script type="module" src="/src/main.ts"></script>
