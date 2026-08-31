@@ -4,7 +4,53 @@ import {
   DIMENSIONS_BATEAU_MVP,
   créerDescripteurBateau,
   pointDansSurfaceBateau,
+  type PointBateau,
+  type VolumeBateau,
 } from '../apps/client/src/jeu/bateau';
+import {
+  HAUTEUR_JOUEUR_PAR_DEFAUT,
+  RAYON_JOUEUR_PAR_DEFAUT,
+} from '../apps/client/src/jeu/mouvement';
+
+interface CapsuleTest {
+  readonly centre: Pick<PointBateau, 'x' | 'z'>;
+  readonly baseY: number;
+  readonly rayon: number;
+  readonly hauteur: number;
+}
+
+interface PassageCapsule {
+  readonly niveau: 'pont' | 'cabine' | 'escalier' | 'cale';
+  readonly point: PointBateau;
+}
+
+function capsuleChevaucheVolume(capsule: CapsuleTest, volume: VolumeBateau): boolean {
+  const chevaucheHorizontalement =
+    capsule.centre.x + capsule.rayon > volume.minX &&
+    capsule.centre.x - capsule.rayon < volume.maxX &&
+    capsule.centre.z + capsule.rayon > volume.minZ &&
+    capsule.centre.z - capsule.rayon < volume.maxZ;
+  const chevaucheVerticalement =
+    capsule.baseY < volume.maxY && capsule.baseY + capsule.hauteur > volume.minY;
+
+  return chevaucheHorizontalement && chevaucheVerticalement;
+}
+
+function interpolerPassage(
+  précédent: CapsuleTest,
+  suivant: CapsuleTest,
+  proportion: number,
+): CapsuleTest {
+  return {
+    centre: {
+      x: précédent.centre.x + (suivant.centre.x - précédent.centre.x) * proportion,
+      z: précédent.centre.z + (suivant.centre.z - précédent.centre.z) * proportion,
+    },
+    baseY: précédent.baseY + (suivant.baseY - précédent.baseY) * proportion,
+    rayon: précédent.rayon,
+    hauteur: précédent.hauteur,
+  };
+}
 
 describe('contrat du bateau de pêche', () => {
   it('expose quatre ancrages stables et des volumes cohérents', () => {
@@ -55,5 +101,49 @@ describe('contrat du bateau de pêche', () => {
     expect(pointDansSurfaceBateau({ x: 0, y: 0.2, z: -1 }, bateau)?.niveau).toBe('cale');
     expect(pointDansSurfaceBateau({ x: 0, y: 0.2, z: 6.5 }, bateau)).toBeUndefined();
   });
-});
 
+  it('laisse une capsule de taille joueur traverser le pont, la cabine et la cale', () => {
+    const bateau = créerDescripteurBateau();
+    const passages: readonly PassageCapsule[] = [
+      { niveau: 'pont', point: { x: -1.1, y: 1.5, z: 0 } as const },
+      { niveau: 'cabine', point: { x: 0, y: 1.5, z: 0 } as const },
+      { niveau: 'escalier', point: { x: 0, y: 1.15, z: -2.5 } as const },
+      { niveau: 'cale', point: { x: 0, y: 0.2, z: -1 } as const },
+    ] as const;
+
+    const capsules = passages.map((passage) => {
+      const surface = pointDansSurfaceBateau(passage.point, bateau);
+      expect(surface?.niveau).toBe(passage.niveau);
+      if (!surface) {
+        return undefined;
+      }
+
+      return {
+        centre: passage.point,
+        baseY: surface.maxY,
+        rayon: RAYON_JOUEUR_PAR_DEFAUT,
+        hauteur: HAUTEUR_JOUEUR_PAR_DEFAUT,
+      };
+    });
+
+    expect(capsules.every((capsule) => capsule !== undefined)).toBe(true);
+    if (capsules.some((capsule) => capsule === undefined)) {
+      return;
+    }
+
+    for (let index = 0; index < capsules.length - 1; index += 1) {
+      const précédent = capsules[index];
+      const suivant = capsules[index + 1];
+      if (!précédent || !suivant) {
+        continue;
+      }
+
+      for (let étape = 0; étape <= 10; étape += 1) {
+        const capsule = interpolerPassage(précédent, suivant, étape / 10);
+        expect(
+          bateau.collisions.some((collision) => capsuleChevaucheVolume(capsule, collision)),
+        ).toBe(false);
+      }
+    }
+  });
+});
