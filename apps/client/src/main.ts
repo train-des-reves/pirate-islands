@@ -12,9 +12,10 @@ import {
 } from 'babylonjs';
 
 import { GRAINE_MVP_PAR_DEFAUT, genererMonde } from '@pirate/coeur-jeu';
-import { estReponseSante } from '@pirate/protocole';
+import { estReponseSante, type OptionsConnexion } from '@pirate/protocole';
 
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
+import { construireGalerieBateauxPiratesE2E } from './jeu/bateau-pirate';
 import { ACTIONS_JEU, creerEtatActions, GestionnaireEntrees, type ActionJeu } from './jeu/entrees';
 import { construireBacASable } from './jeu/monde-test';
 import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
@@ -56,6 +57,16 @@ import {
   type DiagnosticSalleConnecte,
   type ElementsDiagnosticSalle,
 } from './jeu/diagnostic-salle';
+import { construireHarnaisPeche } from './interface/harnais-peche.js';
+import { monterPresentationPeche } from './interface/presenter-peche.js';
+import {
+  connecterSalleJeu,
+  genererNomPecheur,
+  type ConnecteurConnexion,
+  type EtatAffichageConnexion,
+  type EtatConnexion,
+  validerNomSaisi,
+} from './jeu/connexion-salle';
 import {
   construireVisualiseurIa,
   type EtatVisualiseurIa,
@@ -116,6 +127,22 @@ const diagnosticSalleErreur = document.querySelector<HTMLElement>(
   '[data-testid="diagnostic-salle-erreur"]',
 );
 const diagnosticTir = document.querySelector<HTMLElement>('[data-testid="tir-diagnostic"]');
+const panneauAccueil = document.querySelector<HTMLElement>('[data-testid="panneau-accueil"]');
+const formulaireConnexion = document.querySelector<HTMLFormElement>(
+  '[data-testid="formulaire-connexion"]',
+);
+const champNom = document.querySelector<HTMLInputElement>('[data-testid="champ-nom"]');
+const champSalle = document.querySelector<HTMLInputElement>('[data-testid="champ-salle"]');
+const boutonRejoindre = document.querySelector<HTMLButtonElement>('[data-testid="bouton-rejoindre"]');
+const statutConnexion = document.querySelector<HTMLElement>('[data-testid="connexion-statut"]');
+const messageConnexion = document.querySelector<HTMLElement>('[data-testid="connexion-message"]');
+const actionsConnexion = document.querySelector<HTMLElement>('[data-testid="connexion-actions"]');
+const boutonReessayer = document.querySelector<HTMLButtonElement>('[data-testid="bouton-reessayer"]');
+const boutonRetour = document.querySelector<HTMLButtonElement>('[data-testid="bouton-retour"]');
+const infosConnexion = document.querySelector<HTMLElement>('[data-testid="connexion-infos"]');
+const connexionSalle = document.querySelector<HTMLElement>('[data-testid="connexion-salle"]');
+const connexionNom = document.querySelector<HTMLElement>('[data-testid="connexion-nom"]');
+const connexionJoueurs = document.querySelector<HTMLElement>('[data-testid="connexion-joueurs"]');
 
 if (
   !canvas ||
@@ -139,7 +166,21 @@ if (
   !diagnosticSessionId ||
   !diagnosticNombreJoueurs ||
   !diagnosticSalleErreur ||
-  !diagnosticTir
+  !diagnosticTir ||
+  !panneauAccueil ||
+  !formulaireConnexion ||
+  !champNom ||
+  !champSalle ||
+  !boutonRejoindre ||
+  !statutConnexion ||
+  !messageConnexion ||
+  !actionsConnexion ||
+  !boutonReessayer ||
+  !boutonRetour ||
+  !infosConnexion ||
+  !connexionSalle ||
+  !connexionNom ||
+  !connexionJoueurs
 ) {
   throw new Error('La structure de la page Pirate Islands est incomplète.');
 }
@@ -319,6 +360,20 @@ const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
   erreur: diagnosticSalleErreur,
 };
 const indicateurTir = diagnosticTir;
+const panneauAccueilElement = panneauAccueil;
+const formulaireConnexionElement = formulaireConnexion;
+const champNomElement = champNom;
+const champSalleElement = champSalle;
+const boutonRejoindreElement = boutonRejoindre;
+const statutConnexionElement = statutConnexion;
+const messageConnexionElement = messageConnexion;
+const actionsConnexionElement = actionsConnexion;
+const boutonReessayerElement = boutonReessayer;
+const boutonRetourElement = boutonRetour;
+const infosConnexionElement = infosConnexion;
+const connexionSalleElement = connexionSalle;
+const connexionNomElement = connexionNom;
+const connexionJoueursElement = connexionJoueurs;
 
 interface EtatJeuE2E {
   readonly position: { readonly x: number; readonly y: number; readonly z: number };
@@ -352,7 +407,7 @@ declare global {
 }
 
 interface JeuClient {
-  readonly moteur: Engine;
+  readonly moteur?: Engine;
   detruire: () => void;
 }
 
@@ -362,6 +417,9 @@ const modeE2E =
 const modePirates = modeE2E && paramètres.get('vue') === 'pirates';
 const animationPirates = modePirates && paramètres.get('animation') === '1';
 const structurePirates = modePirates && paramètres.get('structure') === '1';
+const modeBateauxPirates = modeE2E && paramètres.get('vue') === 'bateaux-pirates';
+const animationBateauxPirates = modeBateauxPirates && paramètres.get('animation') === '1';
+const structureBateauxPirates = modeBateauxPirates && paramètres.get('structure') === '1';
 const modeViseurIa = modeE2E && paramètres.get('vue') === 'ia';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
@@ -376,14 +434,25 @@ const modeCamera: ModeCameraMonde =
     ? cameraDemandée
     : 'ensemble';
 const présentationBateau = estModePresentationBateau(modeCamera);
-const modeMonde = modeDiagnosticSalle || paramètres.has('graine') || paramètres.has('camera');
+const modePresentationPeche = modeE2E && paramètres.get('presentation') === 'regles-peche';
+const modePanneauE2E = modeE2E && paramètres.get('panneau') === '1';
+const modeMonde =
+  modeDiagnosticSalle ||
+  modePresentationPeche ||
+  présentationBateau ||
+  paramètres.has('graine') ||
+  paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
-conteneurApplication.dataset.mode = modeViseurIa
-  ? 'ia'
+conteneurApplication.dataset.mode = modeBateauxPirates
+  ? 'bateaux-pirates'
+  : modeViseurIa
+    ? 'ia'
   : modePirates
     ? 'pirates'
+  : modePresentationPeche
+    ? 'presentation'
     : modeDiagnosticSalle
       ? 'diagnostic-salle'
       : modeMonde
@@ -392,11 +461,20 @@ conteneurApplication.dataset.mode = modeViseurIa
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
 conteneurApplication.dataset.presentation = présentationBateau ? modeCamera : 'aucune';
-conteneurApplication.dataset.vue = modeViseurIa ? 'ia' : modePirates ? 'pirates' : 'standard';
-conteneurApplication.dataset.structure = structurePirates ? 'oui' : 'non';
+conteneurApplication.dataset.vue = modeBateauxPirates
+  ? 'bateaux-pirates'
+  : modeViseurIa
+    ? 'ia'
+  : modePirates
+    ? 'pirates'
+    : 'standard';
+conteneurApplication.dataset.structure =
+  structureBateauxPirates || structurePirates ? 'oui' : 'non';
 conteneurApplication.dataset.iles = String(monde.iles.length);
 conteneurApplication.dataset.diagnostics =
-  modeViseurIa || modePirates || (modeMonde && modeE2E) ? 'actifs' : 'inactifs';
+  modeBateauxPirates || modeViseurIa || modePirates || (modeMonde && modeE2E)
+    ? 'actifs'
+    : 'inactifs';
 conteneurApplication.dataset.pause = 'non';
 conteneurApplication.dataset.pointeur = 'libere';
 conteneurApplication.dataset.collision = 'aucune';
@@ -412,6 +490,12 @@ if (modeViseurIa) {
   document
     .querySelector<HTMLElement>('.tagline')
     ?.replaceChildren('Silhouette procédurale, poses lisibles et interpolation côté client.');
+} else if (modeBateauxPirates) {
+  document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Galerie de rendu · MVP-2H');
+  document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('Sloop pirate hostile');
+  document
+    .querySelector<HTMLElement>('.tagline')
+    ?.replaceChildren('Silhouette hostile, ancres nommées, sillage et état détruit.');
 } else if (!modeMonde) {
   document
     .querySelector<HTMLElement>('.eyebrow')
@@ -478,6 +562,18 @@ function construireScene(): JeuClient | undefined {
   }
 
   try {
+    if (modePresentationPeche) {
+      const harnais = construireHarnaisPeche(graine, 1);
+      const presentation = monterPresentationPeche(harnais, conteneurApplication);
+      conteneurApplication.dataset.scene = 'ready';
+      conteneurApplication.dataset.presentation = 'regles-peche';
+      return {
+        detruire: () => {
+          presentation.detruire();
+        },
+      };
+    }
+
     const moteur = new Engine(canvasJeu, true, {
       preserveDrawingBuffer: true,
       stencil: true,
@@ -529,6 +625,83 @@ function construireScene(): JeuClient | undefined {
         const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
         dernierTemps = maintenant;
         galerie.mettreAJour(deltaSecondes);
+        scene.render();
+      };
+      moteur.runRenderLoop(boucle);
+      const redimensionner = (): void => moteur.resize();
+      window.addEventListener('resize', redimensionner);
+
+      return {
+        moteur,
+        detruire: () => {
+          window.removeEventListener('resize', redimensionner);
+          moteur.stopRenderLoop(boucle);
+          galerie.liberer();
+          camera.dispose();
+          lumière.dispose();
+          lumièreAvant.dispose();
+          moteur.dispose();
+        },
+      };
+    }
+
+    if (modeBateauxPirates) {
+      scene.clearColor = new Color4(0.02, 0.1, 0.15, 1);
+      scene.fogMode = Scene.FOGMODE_EXP2;
+      scene.fogColor = new Color3(0.02, 0.1, 0.15);
+      scene.fogDensity = 0.014;
+
+      const camera = new FreeCamera(
+        'camera-galerie-bateaux-pirates',
+        new Vector3(0, 6.5, -18),
+        scene,
+      );
+      camera.minZ = 0.1;
+      camera.maxZ = 120;
+      camera.fov = 0.72;
+      camera.setTarget(new Vector3(0, 1.6, 0));
+      scene.activeCamera = camera;
+
+      const lumière = new HemisphericLight(
+        'lumiere-galerie-bateaux-pirates',
+        new Vector3(-0.3, 1, -0.25),
+        scene,
+      );
+      lumière.intensity = 1.1;
+      lumière.diffuse = new Color3(0.88, 0.94, 1);
+      lumière.groundColor = new Color3(0.06, 0.04, 0.05);
+
+      const lumièreAvant = new DirectionalLight(
+        'lumiere-avant-galerie-bateaux-pirates',
+        new Vector3(-0.2, -0.9, 0.5),
+        scene,
+      );
+      lumièreAvant.intensity = 0.68;
+      lumièreAvant.diffuse = new Color3(1, 0.72, 0.54);
+
+      const galerie = construireGalerieBateauxPiratesE2E(scene, {
+        afficherEtiquettes: true,
+        afficherPlanche: structureBateauxPirates,
+        animerInterpolation: animationBateauxPirates,
+        phaseInitiale: tempsE2EParDefaut,
+        figerPose: horlogeTirControlee,
+      });
+      let dernierTemps = performance.now();
+
+      scene.executeWhenReady(() => {
+        conteneurApplication.dataset.scene = 'ready';
+      });
+      const boucle = (): void => {
+        const maintenant = performance.now();
+        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
+        dernierTemps = maintenant;
+        galerie.mettreAJour(deltaSecondes);
+        const etats = galerie.acteurs.map((acteur) => acteur.obtenirEtat().etat).join('|');
+        const sillage = galerie.acteurs
+          .map((acteur) => Number(acteur.obtenirIntensiteSillage()).toFixed(3))
+          .join('|');
+        conteneurApplication.dataset.etatsBateaux = etats;
+        conteneurApplication.dataset.sillageBateaux = sillage;
         scene.render();
       };
       moteur.runRenderLoop(boucle);
@@ -878,6 +1051,129 @@ function construireScene(): JeuClient | undefined {
 const jeu = construireScene();
 
 let diagnosticSalleConnecte: DiagnosticSalleConnecte | undefined;
+
+let connecteurPanneau: ConnecteurConnexion | undefined;
+
+function actualiserStatutPanneau(etat: EtatConnexion, message?: string): void {
+  statutConnexionElement.dataset.etat = etat;
+  messageConnexionElement.textContent =
+    message ??
+    (etat === 'attente'
+      ? 'Prêt à embarquer.'
+      : etat === 'connexion'
+        ? 'Connexion à la salle…'
+        : etat === 'connecte'
+          ? 'Vous êtes à bord.'
+          : etat === 'salle-pleine'
+            ? 'La salle est complète.'
+            : etat === 'deconnecte'
+              ? 'Vous avez quitté la salle.'
+            : etat === 'reconnexion'
+              ? 'Connexion instable, reconnexion…'
+              : 'Connexion impossible.');
+
+  const montreSalle = etat === 'connecte' || etat === 'reconnexion';
+  const pouvoirReessayer =
+    etat === 'echec' || etat === 'salle-pleine' || etat === 'deconnecte';
+  const montrerRetour = montreSalle || pouvoirReessayer;
+  const montrerFormulaire =
+    etat === 'attente' || etat === 'echec' || etat === 'salle-pleine' || etat === 'deconnecte';
+  formulaireConnexionElement.hidden = !montrerFormulaire;
+  actionsConnexionElement.hidden = !montrerRetour;
+  boutonReessayerElement.hidden = !pouvoirReessayer;
+  boutonRetourElement.hidden = !montrerRetour;
+  infosConnexionElement.hidden = !montreSalle;
+}
+
+function actualiserInfosConnexion(donnees: EtatAffichageConnexion): void {
+  connexionSalleElement.textContent = donnees.identifiantSalle ?? '—';
+  connexionNomElement.textContent = donnees.nom ?? '—';
+  connexionJoueursElement.textContent =
+    donnees.nombreJoueurs === undefined ? '—' : `${donnees.nombreJoueurs} joueur${donnees.nombreJoueurs > 1 ? 's' : ''}`;
+}
+
+function afficherPanneauAccueil(): void {
+  panneauAccueilElement.hidden = false;
+  conteneurApplication.dataset.mode = 'accueil';
+}
+
+function urlServeurPartirDe(base: string): string {
+  if (!modeE2E) {
+    return base;
+  }
+  const surdefinie = paramètres.get('serveur');
+  return surdefinie?.trim() || base;
+}
+
+async function rejoindreSalle(): Promise<void> {
+  const nom = champNomElement.value.trim();
+  const erreurNom = validerNomSaisi(nom);
+  if (erreurNom) {
+    actualiserStatutPanneau('echec', erreurNom);
+    champNomElement.focus();
+    return;
+  }
+
+  const identifiantSalle = champSalleElement.value.trim() || undefined;
+  if (connecteurPanneau) {
+    connecteurPanneau.detruire();
+    connecteurPanneau = undefined;
+  }
+
+  actualiserStatutPanneau('connexion');
+  boutonRejoindreElement.disabled = true;
+  const urlServeur = urlServeurPartirDe(
+    import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567',
+  );
+  const optionsConnexion: OptionsConnexion = {
+    ...(nom ? { nom } : {}),
+  };
+
+  connecteurPanneau = await connecterSalleJeu(
+    urlServeur,
+    optionsConnexion,
+    {
+      surEtat: (donnees) => {
+        actualiserStatutPanneau(donnees.etat, donnees.message);
+        if (donnees.etat === 'connecte') {
+          actualiserInfosConnexion(donnees);
+        }
+      },
+    },
+    identifiantSalle,
+  );
+  boutonRejoindreElement.disabled = false;
+}
+
+formulaireConnexionElement.addEventListener('submit', (evenement) => {
+  evenement.preventDefault();
+  void rejoindreSalle();
+});
+
+boutonReessayerElement.addEventListener('click', () => {
+  void rejoindreSalle();
+});
+
+boutonRetourElement.addEventListener('click', () => {
+  if (connecteurPanneau) {
+    connecteurPanneau.detruire();
+    connecteurPanneau = undefined;
+  }
+  actualiserStatutPanneau('attente');
+  boutonRejoindreElement.disabled = false;
+  champNomElement.focus();
+});
+
+const afficherPanneau =
+  !modePirates &&
+  !modeDiagnosticSalle &&
+  !modeMonde &&
+  (modePanneauE2E || !modeE2E);
+
+if (afficherPanneau) {
+  champNomElement.value = genererNomPecheur();
+  afficherPanneauAccueil();
+}
 
 if (modeDiagnosticSalle) {
   conteneurApplication.dataset.diagnostics = 'actifs';

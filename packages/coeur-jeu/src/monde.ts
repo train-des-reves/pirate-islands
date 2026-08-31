@@ -1,8 +1,15 @@
 import type { Point3D } from './index.js';
+import type { ZonePeche } from './peche.js';
+import { figerProfondément } from './immuable.js';
 
 export const GRAINE_MVP_PAR_DEFAUT = 'mvp-defaut';
 export const NOMBRE_ILES_MVP = 3;
 export const GRAINE_MVP = GRAINE_MVP_PAR_DEFAUT;
+
+export const FACTEUR_DISTANCE_ZONE_RIVAGE = 1.12;
+export const RAYON_ZONE_RIVAGE = 3.2;
+export const FACTEUR_CENTRE_ZONE_QUAI = 0.35;
+export const RAYON_ZONE_QUAI = 2.4;
 
 export type FormeIle = 'anse' | 'falaise' | 'cratere';
 
@@ -99,6 +106,7 @@ export interface DescripteurMonde {
   readonly ocean: DescripteurOcean;
   readonly iles: readonly DescripteurIle[];
   readonly marqueurs: readonly MarqueurIle[];
+  readonly zonesPeche: readonly ZonePeche[];
 }
 
 interface AncrageIle {
@@ -162,20 +170,6 @@ const OCEAN_MVP: DescripteurOcean = {
   profondeur: 220,
   hauteur: 0,
 };
-
-function figerProfondément<T>(valeur: T): T {
-  if (typeof valeur !== 'object' || valeur === null || Object.isFrozen(valeur)) {
-    return valeur;
-  }
-
-  for (const enfant of Object.values(valeur)) {
-    if (typeof enfant === 'object' && enfant !== null) {
-      figerProfondément(enfant);
-    }
-  }
-
-  return Object.freeze(valeur);
-}
 
 function entierGraine(graine: string): number {
   let hash = 2166136261;
@@ -456,14 +450,59 @@ export function genererMonde(graine: string = GRAINE_MVP_PAR_DEFAUT): Descripteu
   const graineNormalisee = graine.trim() || GRAINE_MVP_PAR_DEFAUT;
   const aleatoire = créerAleatoire(graineNormalisee);
   const iles = ANCRAGES_ILES.map((ancrage) => créerIle(ancrage, aleatoire));
+  const zonesPeche = créerZonesPeche(iles);
   const monde: DescripteurMonde = {
     graine: graineNormalisee,
     ocean: OCEAN_MVP,
     iles,
     marqueurs: iles.map((ile) => ile.marqueur),
+    zonesPeche,
   };
 
   return figerProfondément(monde);
+}
+
+function créerZonesPeche(iles: readonly DescripteurIle[]): readonly ZonePeche[] {
+  return iles.flatMap((ile) => {
+    const zoneRivage = créerZoneRivage(ile);
+    const zoneQuai = créerZoneQuai(ile);
+    return [zoneRivage, zoneQuai];
+  });
+}
+
+function créerZoneRivage(ile: DescripteurIle): ZonePeche {
+  const direction = ile.approche.direction;
+  const centre = {
+    x: ile.transformation.position.x + direction.x * (ile.rayonX * FACTEUR_DISTANCE_ZONE_RIVAGE),
+    y: ile.transformation.position.y,
+    z: ile.transformation.position.z + direction.z * (ile.rayonZ * FACTEUR_DISTANCE_ZONE_RIVAGE),
+  };
+  return {
+    id: `zone-rivage-${ile.id}`,
+    ileId: ile.id,
+    type: 'rivage',
+    centre,
+    rayon: RAYON_ZONE_RIVAGE,
+    nom: `${ile.nom} — rivage`,
+  };
+}
+
+function créerZoneQuai(ile: DescripteurIle): ZonePeche {
+  const quai = ile.approche.quai;
+  const direction = ile.approche.direction;
+  const centre = {
+    x: quai.position.x + direction.x * (quai.longueur * FACTEUR_CENTRE_ZONE_QUAI),
+    y: ile.transformation.position.y,
+    z: quai.position.z + direction.z * (quai.longueur * FACTEUR_CENTRE_ZONE_QUAI),
+  };
+  return {
+    id: `zone-quai-${ile.id}`,
+    ileId: ile.id,
+    type: 'quai',
+    centre,
+    rayon: RAYON_ZONE_QUAI,
+    nom: `${ile.nom} — quai`,
+  };
 }
 
 export const créerMonde = genererMonde;

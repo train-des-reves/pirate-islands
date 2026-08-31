@@ -126,12 +126,16 @@ export function creerTransformation(
   });
 }
 
-export function creerJoueur(sessionId: string, indexApparition: number): Joueur {
+export function creerJoueur(
+  sessionId: string,
+  indexApparition: number,
+  nom: string = 'Pêcheur',
+): Joueur {
   const bateauId = 'bateau-' + sessionId;
   return new JoueurSchema({
     identifiant: sessionId,
     sessionId,
-    nom: 'Pêcheur',
+    nom,
     transformation: creerTransformation(obtenirPointApparition(indexApparition)),
     sante: SANTE_JOUEUR_MAXIMALE,
     vivant: true,
