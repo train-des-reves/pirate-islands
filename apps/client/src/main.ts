@@ -15,6 +15,7 @@ import { GRAINE_MVP_PAR_DEFAUT, genererMonde } from '@pirate/coeur-jeu';
 import { estReponseSante } from '@pirate/protocole';
 
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
+import { construireGalerieBateauxPiratesE2E } from './jeu/bateau-pirate';
 import { ACTIONS_JEU, creerEtatActions, GestionnaireEntrees, type ActionJeu } from './jeu/entrees';
 import { construireBacASable } from './jeu/monde-test';
 import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
@@ -357,6 +358,9 @@ const modeE2E =
 const modePirates = modeE2E && paramètres.get('vue') === 'pirates';
 const animationPirates = modePirates && paramètres.get('animation') === '1';
 const structurePirates = modePirates && paramètres.get('structure') === '1';
+const modeBateauxPirates = modeE2E && paramètres.get('vue') === 'bateaux-pirates';
+const animationBateauxPirates = modeBateauxPirates && paramètres.get('animation') === '1';
+const structureBateauxPirates = modeBateauxPirates && paramètres.get('structure') === '1';
 const modeViseurIa = modeE2E && paramètres.get('vue') === 'ia';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
@@ -367,8 +371,10 @@ const modeMonde = modeDiagnosticSalle || paramètres.has('graine') || paramètre
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
-conteneurApplication.dataset.mode = modeViseurIa
-  ? 'ia'
+conteneurApplication.dataset.mode = modeBateauxPirates
+  ? 'bateaux-pirates'
+  : modeViseurIa
+    ? 'ia'
   : modePirates
     ? 'pirates'
     : modeDiagnosticSalle
@@ -378,11 +384,20 @@ conteneurApplication.dataset.mode = modeViseurIa
         : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
-conteneurApplication.dataset.vue = modeViseurIa ? 'ia' : modePirates ? 'pirates' : 'standard';
-conteneurApplication.dataset.structure = structurePirates ? 'oui' : 'non';
+conteneurApplication.dataset.vue = modeBateauxPirates
+  ? 'bateaux-pirates'
+  : modeViseurIa
+    ? 'ia'
+  : modePirates
+    ? 'pirates'
+    : 'standard';
+conteneurApplication.dataset.structure =
+  structureBateauxPirates || structurePirates ? 'oui' : 'non';
 conteneurApplication.dataset.iles = String(monde.iles.length);
 conteneurApplication.dataset.diagnostics =
-  modeViseurIa || modePirates || (modeMonde && modeE2E) ? 'actifs' : 'inactifs';
+  modeBateauxPirates || modeViseurIa || modePirates || (modeMonde && modeE2E)
+    ? 'actifs'
+    : 'inactifs';
 conteneurApplication.dataset.pause = 'non';
 conteneurApplication.dataset.pointeur = 'libere';
 conteneurApplication.dataset.collision = 'aucune';
@@ -398,6 +413,12 @@ if (modeViseurIa) {
   document
     .querySelector<HTMLElement>('.tagline')
     ?.replaceChildren('Silhouette procédurale, poses lisibles et interpolation côté client.');
+} else if (modeBateauxPirates) {
+  document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Galerie de rendu · MVP-2H');
+  document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('Sloop pirate hostile');
+  document
+    .querySelector<HTMLElement>('.tagline')
+    ?.replaceChildren('Silhouette hostile, ancres nommées, sillage et état détruit.');
 } else if (!modeMonde) {
   document
     .querySelector<HTMLElement>('.eyebrow')
@@ -495,6 +516,83 @@ function construireScene(): JeuClient | undefined {
         const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
         dernierTemps = maintenant;
         galerie.mettreAJour(deltaSecondes);
+        scene.render();
+      };
+      moteur.runRenderLoop(boucle);
+      const redimensionner = (): void => moteur.resize();
+      window.addEventListener('resize', redimensionner);
+
+      return {
+        moteur,
+        detruire: () => {
+          window.removeEventListener('resize', redimensionner);
+          moteur.stopRenderLoop(boucle);
+          galerie.liberer();
+          camera.dispose();
+          lumière.dispose();
+          lumièreAvant.dispose();
+          moteur.dispose();
+        },
+      };
+    }
+
+    if (modeBateauxPirates) {
+      scene.clearColor = new Color4(0.02, 0.1, 0.15, 1);
+      scene.fogMode = Scene.FOGMODE_EXP2;
+      scene.fogColor = new Color3(0.02, 0.1, 0.15);
+      scene.fogDensity = 0.014;
+
+      const camera = new FreeCamera(
+        'camera-galerie-bateaux-pirates',
+        new Vector3(0, 6.5, -18),
+        scene,
+      );
+      camera.minZ = 0.1;
+      camera.maxZ = 120;
+      camera.fov = 0.72;
+      camera.setTarget(new Vector3(0, 1.6, 0));
+      scene.activeCamera = camera;
+
+      const lumière = new HemisphericLight(
+        'lumiere-galerie-bateaux-pirates',
+        new Vector3(-0.3, 1, -0.25),
+        scene,
+      );
+      lumière.intensity = 1.1;
+      lumière.diffuse = new Color3(0.88, 0.94, 1);
+      lumière.groundColor = new Color3(0.06, 0.04, 0.05);
+
+      const lumièreAvant = new DirectionalLight(
+        'lumiere-avant-galerie-bateaux-pirates',
+        new Vector3(-0.2, -0.9, 0.5),
+        scene,
+      );
+      lumièreAvant.intensity = 0.68;
+      lumièreAvant.diffuse = new Color3(1, 0.72, 0.54);
+
+      const galerie = construireGalerieBateauxPiratesE2E(scene, {
+        afficherEtiquettes: true,
+        afficherPlanche: structureBateauxPirates,
+        animerInterpolation: animationBateauxPirates,
+        phaseInitiale: tempsE2EParDefaut,
+        figerPose: horlogeTirControlee,
+      });
+      let dernierTemps = performance.now();
+
+      scene.executeWhenReady(() => {
+        conteneurApplication.dataset.scene = 'ready';
+      });
+      const boucle = (): void => {
+        const maintenant = performance.now();
+        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
+        dernierTemps = maintenant;
+        galerie.mettreAJour(deltaSecondes);
+        const etats = galerie.acteurs.map((acteur) => acteur.obtenirEtat().etat).join('|');
+        const sillage = galerie.acteurs
+          .map((acteur) => Number(acteur.obtenirIntensiteSillage()).toFixed(3))
+          .join('|');
+        conteneurApplication.dataset.etatsBateaux = etats;
+        conteneurApplication.dataset.sillageBateaux = sillage;
         scene.render();
       };
       moteur.runRenderLoop(boucle);
