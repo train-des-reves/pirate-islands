@@ -6,7 +6,7 @@ Le surveillant coordonne plusieurs issues en parallèle. Une revue lancée direc
 
 ## Décision
 
-Après publication d’une PR, son exécuteur lance lui-même une revue indépendante Terra `medium` et reste responsable de la boucle avec ce reviewer. Il annonce au surveillant l’`Entrée en revue` avec l’issue, la PR, le head, la CI, la preuve et le périmètre contrôlé. Le même reviewer est réutilisé pour chaque nouveau head de la même PR ; aucun reviewer parallèle n’est créé.
+Après publication d’une PR, son exécuteur lance lui-même une revue indépendante Terra `medium` et reste responsable de la boucle avec ce reviewer. Il annonce directement au surveillant l’`Entrée en revue` avec l’issue, la PR, le head, la CI, la preuve et le périmètre contrôlé. Le même reviewer est réutilisé pour chaque nouveau head de la même PR ; aucun reviewer parallèle n’est créé. Tout changement d’étape, blocage, nouveau head ou résultat de barrière est également transmis directement au surveillant via `send_message_to_thread`, sans relais par un parent, sous la forme minimale `thème — état`. Les messages formels gardent uniquement les champs requis par la checklist.
 
 Après traitement des retours et nouvelle validation, l’exécuteur transmet un `Go final` explicite seulement lorsque la CI GitHub est verte, que le reviewer est favorable sur le head exact, que la preuve est cohérente et que la PR est fusionnable. Le surveillant fusionne alors la PR, vérifie `main` et l’issue, puis archive les tâches après confirmation de la fusion.
 
