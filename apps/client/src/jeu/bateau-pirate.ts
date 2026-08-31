@@ -822,6 +822,10 @@ export interface OptionsGalerieBateauxPiratesE2E {
   readonly animerInterpolation?: boolean;
   readonly afficherEtiquettes?: boolean;
   readonly afficherPlanche?: boolean;
+  /** Phase initiale (secondes) de l'animation, pour figer une pose déterministe en E2E. */
+  readonly phaseInitiale?: number;
+  /** Lorsque vrai, fige le temps accumulé sur la phase initiale (capture déterministe). */
+  readonly figerPose?: boolean;
 }
 
 export interface GalerieBateauxPiratesE2E {
@@ -1079,7 +1083,7 @@ export function construireGalerieBateauxPiratesE2E(
     options.afficherPlanche === true,
   );
 
-  let temps = 0;
+  let temps = Math.max(0, options.phaseInitiale ?? 0);
   let libéré = false;
 
   return {
@@ -1096,7 +1100,9 @@ export function construireGalerieBateauxPiratesE2E(
         DELTA_MAXIMUM_INTERPOLATION_BATEAU_PIRATE,
         0,
       );
-      temps += delta;
+      if (options.figerPose !== true) {
+        temps += delta;
+      }
       if (options.animerInterpolation) {
         const acteur = acteurs[1];
         if (acteur) {

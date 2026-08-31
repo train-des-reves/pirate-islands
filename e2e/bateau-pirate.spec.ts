@@ -47,7 +47,9 @@ test.describe('sloop pirate hostile', () => {
     expect(valeurs[1]).toBeGreaterThan(0.9);
     expect(valeurs[3]).toBe(0);
 
-    await page.goto('/?e2e=1&vue=bateaux-pirates&animation=1');
+    // La pose du sloop « En mouvement » est figée par le paramètre `temps` pour
+    // des captures déterministes (la phase ne dépend jamais de l'horloge réelle).
+    await page.goto('/?e2e=1&vue=bateaux-pirates&animation=1&temps=1.9635');
     await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
     await expect(page.getByTestId('bateau-pirate-fixture')).toHaveCount(4);
     await expect(page.getByTestId('bateaux-pirates-planche')).toHaveCount(0);
@@ -70,7 +72,9 @@ test.describe('sloop pirate hostile', () => {
       }
     });
 
-    await page.goto('/?e2e=1&vue=bateaux-pirates&animation=1');
+    // La pose du sloop « En mouvement » est figée par `temps` pour une capture
+    // déterministe : la phase du sinus ne dépend jamais de l'horloge réelle.
+    await page.goto('/?e2e=1&vue=bateaux-pirates&animation=1&temps=1.9635');
     await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
     await expect(page.getByTestId('bateau-pirate-fixture')).toHaveCount(4);
     await expect(page).toHaveScreenshot('bateau-pirate-mouvement-1280x720.png', {
@@ -84,7 +88,7 @@ test.describe('sloop pirate hostile', () => {
       fullPage: false,
     });
 
-    await page.goto('/?e2e=1&vue=bateaux-pirates&structure=1&animation=1');
+    await page.goto('/?e2e=1&vue=bateaux-pirates&structure=1&animation=1&temps=1.9635');
     await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
     await expect(page).toHaveScreenshot('bateau-pirate-endommage-detruit-1280x720.png', {
       animations: 'disabled',
