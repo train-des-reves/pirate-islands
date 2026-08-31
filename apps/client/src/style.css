@@ -88,6 +88,10 @@ body {
   display: block;
 }
 
+.scene-shell[data-mode='bac'] .halo {
+  display: none;
+}
+
 .interface {
   position: relative;
   z-index: 2;
