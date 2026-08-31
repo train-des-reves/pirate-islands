@@ -60,6 +60,7 @@ test.describe('arrivée en salle multijoueur', () => {
       expect(identifiantSalle).not.toBe('—');
       await expect(page.getByTestId('connexion-nom')).toHaveText('Pêcheur-Aube-0001');
       await expect(page.getByTestId('connexion-joueurs')).toHaveText('1 joueur');
+      await expect(page.getByTestId('formulaire-connexion')).toBeHidden();
 
       await ouvrirPanneau(pageSecondJoueur, 'Pêcheur-Brume-0002');
       await rejoindreSalle(pageSecondJoueur, identifiantSalle);
@@ -67,6 +68,8 @@ test.describe('arrivée en salle multijoueur', () => {
       await expect(pageSecondJoueur.getByTestId('connexion-salle')).toHaveText(identifiantSalle);
       await expect(pageSecondJoueur.getByTestId('connexion-nom')).toHaveText('Pêcheur-Brume-0002');
       await expect(pageSecondJoueur.getByTestId('connexion-joueurs')).toHaveText('2 joueurs');
+      await expect(pageSecondJoueur.getByTestId('formulaire-connexion')).toBeHidden();
+      await expect(pageSecondJoueur.getByTestId('connexion-infos')).toBeVisible();
 
       await expect(page.getByTestId('connexion-joueurs')).toHaveText('2 joueurs');
 

@@ -365,6 +365,10 @@ h1 {
   gap: 15px;
 }
 
+.panneau-accueil-form[hidden] {
+  display: none;
+}
+
 .champ {
   display: grid;
   gap: 7px;
