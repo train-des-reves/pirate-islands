@@ -46,9 +46,6 @@ La vue de contrôle à hauteur de joueur est :
 http://127.0.0.1:4173/?e2e=1&graine=mvp-defaut&camera=rivage
 ```
 
-La comparaison de la vue d'ensemble conserve une tolérance inter-plateforme
-explicite. Le run CI qui a introduit cette mesure a compté 13 798 pixels sur
-921 600, soit 1,497 % (rendu Chromium Ubuntu comparé à la baseline). Le seuil
-Playwright est fixé à `0.015`, juste au-dessus de cette observation, afin de
-laisser passer cet écart de rasterisation sans masquer une variation visuelle
-plus large.
+La vue d’ensemble est conservée comme capture d’observation 1280×720. Les
+régressions sont vérifiées par les assertions DOM et d’état du parcours E2E ;
+aucune comparaison de pixels ni baseline visuelle n’est utilisée.
