@@ -19,13 +19,16 @@ type LireCombatResultat = {
         readonly horodatageServeur: number;
       }
     | undefined;
+  readonly codeDeconnexion: number | undefined;
 };
 
 type CrochetCombat = {
   readonly tirerReseau?: (cibleId?: string) => void;
   readonly tirerDansLeVide?: () => void;
+  readonly rejouerTir?: () => void;
   readonly infligerDegatsE2E?: (degats: number) => void;
   readonly lireCombat?: () => LireCombatResultat;
+  readonly lireDeconnexion?: () => number | undefined;
 };
 
 async function attendreCrochet(page: Page): Promise<void> {
@@ -64,6 +67,14 @@ async function tirerDansLeVide(page: Page): Promise<void> {
     const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetCombat })
       .__pirateIslandsE2E;
     crochet?.tirerDansLeVide?.();
+  });
+}
+
+async function rejouerTir(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetCombat })
+      .__pirateIslandsE2E;
+    crochet?.rejouerTir?.();
   });
 }
 
@@ -158,6 +169,19 @@ test('tir accepté, raté sans effet, mort et réapparition côté serveur', asy
   await expect(page.getByTestId('combat-reapparition')).toHaveText('En attente : non');
   await page.screenshot({
     path: 'docs/preuves/combat-reapparition-1280x720.png',
+    fullPage: false,
+  });
+
+  // Rejeu d'une séquence déjà consommée : le serveur rejette l'intention (code
+  // 4003) et déconnecte le joueur, sans dégât ajouté ni nouvelle santé pirate.
+  const santePirateAvantRejeu = (await lireCombat(page)).santePirate;
+  await rejouerTir(page);
+  await expect
+    .poll(async () => (await lireCombat(page)).codeDeconnexion, { timeout: 6_000 })
+    .toBe(4003);
+  expect((await lireCombat(page)).santePirate).toBe(santePirateAvantRejeu);
+  await page.screenshot({
+    path: 'docs/preuves/combat-rejeu-refuse-1280x720.png',
     fullPage: false,
   });
 

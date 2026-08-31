@@ -24,6 +24,7 @@ export interface ElementsDiagnosticSalle {
   readonly santePirate: HTMLElement;
   readonly reapparition: HTMLElement;
   readonly resultat: HTMLElement;
+  readonly deconnexion: HTMLElement;
 }
 
 /** État de combat exposé au harnais E2E, jamais fourni au serveur. */
@@ -34,6 +35,7 @@ export interface EtatCombatDiagnostic {
   readonly pirateNeutralise: boolean;
   readonly enAttenteReapparition: boolean;
   readonly dernierResultat: MessageResultatTir | undefined;
+  readonly codeDeconnexion: number | undefined;
 }
 
 export interface DiagnosticSalleConnecte {
@@ -42,10 +44,14 @@ export interface DiagnosticSalleConnecte {
   readonly tirer: (cibleId?: string) => void;
   /** Émet une intention de tir volontairement dans le vide (raté sans effet). */
   readonly tirerDansLeVide: () => void;
+  /** Rejoue la dernière intention avec la même séquence : le serveur la rejette. */
+  readonly rejouerDernierTir: () => void;
   /** Appelle le mannequin E2E serveur réservé aux tests. */
   readonly infligerDegatsE2E: (degats: number) => void;
   /** Lit l'état de combat réel observé après la dernière synchronisation réseau. */
   readonly lireCombat: () => EtatCombatDiagnostic;
+  /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
+  readonly lireDeconnexion: () => number | undefined;
   readonly detruire: () => void;
 }
 
@@ -59,6 +65,7 @@ interface EtatCombatInterne {
   pirateNeutralise: boolean;
   enAttenteReapparition: boolean;
   dernierResultat: MessageResultatTir | undefined;
+  codeDeconnexion: number | undefined;
 }
 
 function écrireDiagnosticCombat(
@@ -69,6 +76,10 @@ function écrireDiagnosticCombat(
   elements.santeJoueur.textContent = 'Santé joueur : ' + etat.santeJoueur;
   elements.santePirate.textContent = 'Santé pirate : ' + etat.santePirate;
   elements.reapparition.textContent = 'En attente : ' + (etat.enAttenteReapparition ? 'oui' : 'non');
+  elements.deconnexion.textContent =
+    etat.codeDeconnexion === undefined
+      ? 'Rejet serveur : aucun'
+      : 'Rejet serveur : ' + etat.codeDeconnexion;
   const dernier = etat.dernierResultat;
   if (dernier === undefined) {
     elements.resultat.textContent = 'Dernier tir : —';
@@ -156,6 +167,8 @@ export async function connecterDiagnosticSalle(
   elements.erreur.hidden = true;
 
   let sequence = 1;
+  let dernièreIntentionEnvoyée: MessageIntentionTir | undefined;
+  let dernierCodeDeconnexion: number | undefined;
   let etatCombat: EtatCombatInterne = {
     cibleId: null,
     santeJoueur: 100,
@@ -164,6 +177,7 @@ export async function connecterDiagnosticSalle(
     pirateNeutralise: false,
     enAttenteReapparition: false,
     dernierResultat: undefined,
+    codeDeconnexion: undefined,
   };
 
   const mettreAJourDiagnostic = (): void => {
@@ -194,6 +208,17 @@ export async function connecterDiagnosticSalle(
     },
   );
 
+  salleTypée.onError((code) => {
+    dernierCodeDeconnexion = code;
+    etatCombat.codeDeconnexion = code;
+    mettreAJourDiagnostic();
+  });
+  salleTypée.onLeave((code) => {
+    dernierCodeDeconnexion = code;
+    etatCombat.codeDeconnexion = code;
+    mettreAJourDiagnostic();
+  });
+
   salleTypée.onStateChange(() => mettreAJourDiagnostic());
   mettreAJourDiagnostic();
 
@@ -205,7 +230,7 @@ export async function connecterDiagnosticSalle(
     readonly x: number;
     readonly y: number;
     readonly z: number;
-  }): void => {
+  }): MessageIntentionTir => {
     const intention: MessageIntentionTir = {
       sequence,
       origineX: origine.x,
@@ -218,6 +243,7 @@ export async function connecterDiagnosticSalle(
     };
     sequence += 1;
     salleTypée.send(NOMS_MESSAGES.intentionTir, intention);
+    return intention;
   };
 
   let détruite = false;
@@ -229,7 +255,8 @@ export async function connecterDiagnosticSalle(
       }
 
       const visee = calculerViseeDeterministe(salleTypée, cibleId);
-      émettreIntention(visee.origine, visee.direction);
+      const derniereIntention = émettreIntention(visee.origine, visee.direction);
+      dernièreIntentionEnvoyée = derniereIntention;
     },
     tirerDansLeVide: () => {
       if (détruite) {
@@ -245,7 +272,19 @@ export async function connecterDiagnosticSalle(
       // Direction horizontale vers l'est : les pirates sont sur des îles
       // surélevées (torse bien au-dessus de 1,62), donc ce rayon ne les touche
       // jamais et produit un raté sans effet, de façon déterministe.
-      émettreIntention(origine, { x: 1, y: 0, z: 0 });
+      const derniereIntention = émettreIntention(origine, { x: 1, y: 0, z: 0 });
+      dernièreIntentionEnvoyée = derniereIntention;
+    },
+    rejouerDernierTir: () => {
+      if (détruite) {
+        return;
+      }
+      if (dernièreIntentionEnvoyée === undefined) {
+        return;
+      }
+      // Réémet la dernière intention sans consommer de nouvelle séquence : le
+      // serveur doit la refuser comme déjà consommée (séquence rejouée).
+      salleTypée.send(NOMS_MESSAGES.intentionTir, dernièreIntentionEnvoyée);
     },
     infligerDegatsE2E: (degats: number) => {
       if (détruite) {
@@ -262,7 +301,9 @@ export async function connecterDiagnosticSalle(
       pirateNeutralise: etatCombat.pirateNeutralise,
       enAttenteReapparition: etatCombat.enAttenteReapparition,
       dernierResultat: etatCombat.dernierResultat,
+      codeDeconnexion: etatCombat.codeDeconnexion,
     }),
+    lireDeconnexion: () => dernierCodeDeconnexion,
     detruire: () => {
       if (détruite) {
         return;

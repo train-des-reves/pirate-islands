@@ -57,7 +57,70 @@
         <p data-testid="combat-sante-pirate">Santé pirate : 100</p>
         <p data-testid="combat-reapparition">En attente : non</p>
         <p data-testid="combat-resultat">Dernier tir : —</p>
+        <p data-testid="combat-deconnexion">Rejet serveur : aucun</p>
         <p class="diagnostic-salle-erreur" data-testid="diagnostic-salle-erreur" hidden></p>
+      </aside>
+      <aside
+        class="panneau-accueil"
+        data-testid="panneau-accueil"
+        data-etat="attente"
+        hidden
+        aria-live="polite"
+      >
+        <p class="panneau-accueil-eyebrow">Arrivée en salle · MVP-2B</p>
+        <h2>Embarquer</h2>
+        <form class="panneau-accueil-form" data-testid="formulaire-connexion">
+          <label class="champ">
+            <span>Nom de pêcheur</span>
+            <input
+              data-testid="champ-nom"
+              type="text"
+              name="nom"
+              maxlength="32"
+              autocomplete="nickname"
+              placeholder="Pêcheur-…"
+              required
+            />
+          </label>
+          <label class="champ">
+            <span>Identifiant de salle <em>(facultatif)</em></span>
+            <input
+              data-testid="champ-salle"
+              type="text"
+              name="salle"
+              maxlength="128"
+              placeholder="Laisser vide pour créer ou rejoindre"
+            />
+          </label>
+          <button type="submit" class="bouton-principal" data-testid="bouton-rejoindre">
+            Rejoindre la salle
+          </button>
+        </form>
+        <div class="panneau-accueil-statut" data-testid="connexion-statut" data-etat="attente">
+          <p data-testid="connexion-message">Prêt à embarquer.</p>
+        </div>
+        <div class="panneau-accueil-actions" data-testid="connexion-actions" hidden>
+          <button type="button" class="bouton-secondaire" data-testid="bouton-reessayer">
+            Réessayer
+          </button>
+          <button type="button" class="bouton-secondaire" data-testid="bouton-retour">
+            Retour
+          </button>
+        </div>
+        <dl class="panneau-accueil-infos" data-testid="connexion-infos" hidden>
+          <div>
+            <dt>Salle</dt>
+            <dd data-testid="connexion-salle">—</dd>
+          </div>
+          <div>
+            <dt>Nom</dt>
+            <dd data-testid="connexion-nom">—</dd>
+          </div>
+          <div>
+            <dt>Équipage</dt>
+            <dd data-testid="connexion-joueurs">—</dd>
+          </div>
+        </dl>
       </aside>
       <div class="pause-overlay" data-testid="pause-overlay" hidden>
         <section class="pause-card" role="dialog" aria-modal="true" aria-labelledby="titre-pause">

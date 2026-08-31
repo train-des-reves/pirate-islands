@@ -135,7 +135,7 @@ export class SalleJeu extends Room<{
       prochaineReapparitionMs: 0,
     };
 
-    const joueur = creerJoueur(client.sessionId, indexApparition);
+    const joueur = creerJoueur(client.sessionId, indexApparition, validation.valeur.nom);
     const bateau = creerBateau(client.sessionId, indexApparition);
 
     this.state.joueurs.set(client.sessionId, joueur);
