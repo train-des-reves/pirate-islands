@@ -94,8 +94,7 @@ interface JeuClient {
 }
 
 const paramètres = new URLSearchParams(window.location.search);
-const modeE2E =
-  import.meta.env.DEV && (import.meta.env.VITE_E2E === '1' || paramètres.get('e2e') === '1');
+const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
