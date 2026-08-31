@@ -15,3 +15,5 @@ Après traitement des retours et nouvelle validation, l’exécuteur transmet un
 - La responsabilité de la qualité et du dialogue de revue reste attachée à l’issue et à son exécuteur.
 - Le surveillant ne fusionne pas une PR simplement parce qu’elle semble prête ou qu’un ancien head avait été validé.
 - Les PR déjà en revue lors de l’adoption reprennent leur reviewer existant ; les nouvelles PR suivent ce protocole dès leur publication.
+- Le surveillant ne bloque pas sur l’attente d’un agent : il s’appuie sur les messages de retour et sur le prochain passage planifié.
+- Aucun modèle `github-copilot/*` n’est autorisé. Une revue déjà produite par cette route ne constitue pas un verdict recevable pour le `Go final` ; l’exécuteur doit lancer un reviewer direct `gpt-5.6-terra`.
