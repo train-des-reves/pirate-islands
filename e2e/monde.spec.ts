@@ -26,7 +26,9 @@ test.describe('monde ensemencé', () => {
     await expect(page).toHaveScreenshot('monde-ensemble-1280x720.png', {
       animations: 'disabled',
       caret: 'hide',
-      maxDiffPixelRatio: 0.03,
+      // CI Ubuntu a observé 13 798 pixels différents sur 921 600 (1,497 %).
+      // 0,015 est le plus petit seuil reproductible avec cette marge mesurée.
+      maxDiffPixelRatio: 0.015,
       scale: 'css',
     });
     await page.screenshot({

@@ -12,6 +12,16 @@ export interface TransformationMonde {
   readonly echelle: Point3D;
 }
 
+export interface ProfilTerrainIle {
+  readonly segments: number;
+  readonly relief: readonly number[];
+  readonly rayonEpaule: number;
+  readonly rayonCouronne: number;
+  readonly hauteurRivage: number;
+  readonly hauteurCouronne: number;
+  readonly hauteurSommet: number;
+}
+
 export interface CollisionIle {
   readonly forme: 'ellipse';
   readonly centre: Point3D;
@@ -20,6 +30,7 @@ export interface CollisionIle {
   readonly rayonZ: number;
   readonly hauteurSurface: number;
   readonly hauteurBase: number;
+  readonly profil: ProfilTerrainIle;
 }
 
 export interface RivageIle {
@@ -256,6 +267,16 @@ function créerIle(ancrage: AncrageIle, aleatoire: () => number): DescripteurIle
   const rayonZ = ancrage.rayonZ + plage(aleatoire, -0.9, 0.9);
   const hauteurTerrain = ancrage.hauteur + plage(aleatoire, -0.25, 0.28);
   const relief = créerRelief(aleatoire, ancrage.forme);
+  const hauteurCouronne = hauteurTerrain * (ancrage.forme === 'falaise' ? 0.9 : 0.76);
+  const profil: ProfilTerrainIle = {
+    segments: relief.length,
+    relief,
+    rayonEpaule: 0.98,
+    rayonCouronne: 0.6,
+    hauteurRivage: OCEAN_MVP.hauteur + 0.12,
+    hauteurCouronne,
+    hauteurSommet: hauteurTerrain,
+  };
   const collision: CollisionIle = {
     forme: 'ellipse',
     centre,
@@ -264,6 +285,7 @@ function créerIle(ancrage: AncrageIle, aleatoire: () => number): DescripteurIle
     rayonZ,
     hauteurSurface: hauteurTerrain,
     hauteurBase: OCEAN_MVP.hauteur - 0.15,
+    profil,
   };
   const rivage: RivageIle = {
     centre,
@@ -363,6 +385,15 @@ function créerIle(ancrage: AncrageIle, aleatoire: () => number): DescripteurIle
 }
 
 export function pointDansCollisionIle(ile: DescripteurIle, point: Point3D): boolean {
+  const hauteurSurface = hauteurSurfaceIle(ile, point);
+  if (hauteurSurface === undefined) {
+    return false;
+  }
+
+  return point.y >= ile.collision.hauteurBase && point.y <= hauteurSurface + 1.5;
+}
+
+export function hauteurSurfaceIle(ile: DescripteurIle, point: Point3D): number | undefined {
   const relatif = tournerPoint(
     {
       x: point.x - ile.collision.centre.x,
@@ -373,19 +404,51 @@ export function pointDansCollisionIle(ile: DescripteurIle, point: Point3D): bool
   );
   const distanceX = relatif.x / ile.collision.rayonX;
   const distanceZ = relatif.z / ile.collision.rayonZ;
-  const dansEllipse = distanceX * distanceX + distanceZ * distanceZ <= 1;
+  const distance = Math.hypot(distanceX, distanceZ);
+  if (distance > 1) {
+    return undefined;
+  }
 
-  return (
-    dansEllipse &&
-    point.y >= ile.collision.hauteurBase &&
-    point.y <= ile.collision.hauteurSurface + 1.5
-  );
+  const profil = ile.collision.profil;
+  const angle = (Math.atan2(distanceZ, distanceX) + Math.PI * 2) % (Math.PI * 2);
+  const positionSegment = (angle / (Math.PI * 2)) * profil.segments;
+  const indexSegment = Math.floor(positionSegment);
+  const indexSuivant = (indexSegment + 1) % profil.segments;
+  const progression = positionSegment - indexSegment;
+  const reliefSegment = profil.relief[indexSegment] ?? 1;
+  const reliefSuivant = profil.relief[indexSuivant] ?? reliefSegment;
+  const relief = reliefSegment + (reliefSuivant - reliefSegment) * progression;
+  const rayonEpaule = profil.rayonEpaule * relief;
+  const rayonCouronne = profil.rayonCouronne * relief;
+
+  if (distance >= rayonEpaule) {
+    const progressionPente = (1 - distance) / (1 - rayonEpaule);
+    return (
+      ile.collision.hauteurBase +
+      (profil.hauteurRivage - ile.collision.hauteurBase) * progressionPente
+    );
+  }
+
+  if (distance >= rayonCouronne) {
+    const progressionPente = (distance - rayonCouronne) / (rayonEpaule - rayonCouronne);
+    return (
+      profil.hauteurCouronne + (profil.hauteurRivage - profil.hauteurCouronne) * progressionPente
+    );
+  }
+
+  const progressionSommet = distance / rayonCouronne;
+  return profil.hauteurSommet + (profil.hauteurCouronne - profil.hauteurSommet) * progressionSommet;
 }
 
 export function apparitionValide(ile: DescripteurIle, apparition: Apparition): boolean {
+  const hauteurSurface = hauteurSurfaceIle(ile, apparition.position);
+  if (hauteurSurface === undefined) {
+    return false;
+  }
+
   return (
     pointDansCollisionIle(ile, apparition.position) &&
-    apparition.position.y >= ile.collision.hauteurSurface - 0.05
+    apparition.position.y >= hauteurSurface - 0.05
   );
 }
 

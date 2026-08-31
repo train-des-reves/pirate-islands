@@ -92,49 +92,49 @@ function créerTerrain(ile: DescripteurIle, scene: Scene): Mesh {
   const mesh = new Mesh(`terrain-${ile.id}`, scene);
   const positions: number[] = [];
   const indices: number[] = [];
+  const profil = ile.collision.profil;
+  const segments = profil.segments;
   const base = ile.collision.hauteurBase;
-  const hauteurRivage = ile.rivage.hauteur;
-  const hauteurCouronne = ile.hauteurTerrain * (ile.forme === 'falaise' ? 0.9 : 0.76);
 
-  for (let index = 0; index < SEGMENTS_ILE; index += 1) {
-    const angle = (index / SEGMENTS_ILE) * Math.PI * 2;
+  for (let index = 0; index < segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
     const cosinus = Math.cos(angle);
     const sinus = Math.sin(angle);
     positions.push(cosinus * ile.rayonX, base, sinus * ile.rayonZ);
   }
 
-  for (let index = 0; index < SEGMENTS_ILE; index += 1) {
-    const angle = (index / SEGMENTS_ILE) * Math.PI * 2;
+  for (let index = 0; index < segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
     const cosinus = Math.cos(angle);
     const sinus = Math.sin(angle);
-    const relief = ile.relief[index] ?? 1;
+    const relief = profil.relief[index] ?? 1;
     positions.push(
-      cosinus * ile.rayonX * 0.98 * relief,
-      hauteurRivage,
-      sinus * ile.rayonZ * 0.98 * relief,
+      cosinus * ile.rayonX * profil.rayonEpaule * relief,
+      profil.hauteurRivage,
+      sinus * ile.rayonZ * profil.rayonEpaule * relief,
     );
   }
 
-  for (let index = 0; index < SEGMENTS_ILE; index += 1) {
-    const angle = (index / SEGMENTS_ILE) * Math.PI * 2;
+  for (let index = 0; index < segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
     const cosinus = Math.cos(angle);
     const sinus = Math.sin(angle);
-    const relief = ile.relief[index] ?? 1;
+    const relief = profil.relief[index] ?? 1;
     positions.push(
-      cosinus * ile.rayonX * 0.6 * relief,
-      hauteurCouronne,
-      sinus * ile.rayonZ * 0.6 * relief,
+      cosinus * ile.rayonX * profil.rayonCouronne * relief,
+      profil.hauteurCouronne,
+      sinus * ile.rayonZ * profil.rayonCouronne * relief,
     );
   }
 
   const sommet = positions.length / 3;
-  positions.push(0, ile.hauteurTerrain, 0);
-  ajouterFacesAnneau(indices, 0, SEGMENTS_ILE, SEGMENTS_ILE);
-  ajouterFacesAnneau(indices, SEGMENTS_ILE, SEGMENTS_ILE * 2, SEGMENTS_ILE);
+  positions.push(0, profil.hauteurSommet, 0);
+  ajouterFacesAnneau(indices, 0, segments, segments);
+  ajouterFacesAnneau(indices, segments, segments * 2, segments);
 
-  for (let index = 0; index < SEGMENTS_ILE; index += 1) {
-    const suivant = (index + 1) % SEGMENTS_ILE;
-    indices.push(SEGMENTS_ILE * 2 + index, sommet, SEGMENTS_ILE * 2 + suivant);
+  for (let index = 0; index < segments; index += 1) {
+    const suivant = (index + 1) % segments;
+    indices.push(segments * 2 + index, sommet, segments * 2 + suivant);
   }
 
   appliquerGéométrie(mesh, positions, indices);

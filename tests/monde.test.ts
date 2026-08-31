@@ -5,7 +5,9 @@ import {
   NOMBRE_ILES_MVP,
   apparitionValide,
   genererMonde,
+  hauteurSurfaceIle,
   pointDansCollisionIle,
+  type DescripteurIle,
 } from '@pirate/coeur-jeu';
 
 function distanceHorizontale(
@@ -13,6 +15,24 @@ function distanceHorizontale(
   seconde: { readonly x: number; readonly z: number },
 ): number {
   return Math.hypot(première.x - seconde.x, première.z - seconde.z);
+}
+
+function pointLocalIle(
+  ile: DescripteurIle,
+  distanceX: number,
+  distanceZ: number,
+  y: number,
+): { readonly x: number; readonly y: number; readonly z: number } {
+  const cosinus = Math.cos(ile.collision.rotationY);
+  const sinus = Math.sin(ile.collision.rotationY);
+  const localX = distanceX * ile.rayonX;
+  const localZ = distanceZ * ile.rayonZ;
+
+  return {
+    x: ile.collision.centre.x + localX * cosinus - localZ * sinus,
+    y,
+    z: ile.collision.centre.z + localX * sinus + localZ * cosinus,
+  };
 }
 
 describe('monde déterministe', () => {
@@ -90,6 +110,53 @@ describe('monde déterministe', () => {
       expect(apparitionValide(ile, ile.apparitionJoueur)).toBe(true);
       for (const apparition of ile.apparitionsPirates) {
         expect(apparitionValide(ile, apparition)).toBe(true);
+      }
+    }
+  });
+
+  it('suit le relief visible sur les pentes, les bords et les apparitions', () => {
+    const monde = genererMonde();
+    const ile = monde.iles[0];
+    if (!ile) {
+      throw new Error('La graine MVP doit produire une première île.');
+    }
+
+    const pointPente = pointLocalIle(ile, 0.8, 0, 0);
+    const surfacePente = hauteurSurfaceIle(ile, pointPente);
+    expect(surfacePente).toBeDefined();
+    if (surfacePente === undefined) {
+      return;
+    }
+
+    expect(surfacePente).toBeLessThan(ile.collision.hauteurSurface);
+    expect(pointDansCollisionIle(ile, { ...pointPente, y: surfacePente + 1.4 })).toBe(true);
+    expect(pointDansCollisionIle(ile, { ...pointPente, y: surfacePente + 1.6 })).toBe(false);
+
+    const pointBord = pointLocalIle(ile, 0.99, 0, ile.collision.hauteurSurface);
+    const surfaceBord = hauteurSurfaceIle(ile, pointBord);
+    expect(surfaceBord).toBeDefined();
+    if (surfaceBord !== undefined) {
+      expect(surfaceBord).toBeLessThan(ile.collision.hauteurSurface);
+      expect(pointDansCollisionIle(ile, pointBord)).toBe(false);
+    }
+
+    const pointHorsBord = pointLocalIle(ile, 1.001, 0, 0);
+    expect(hauteurSurfaceIle(ile, pointHorsBord)).toBeUndefined();
+    expect(pointDansCollisionIle(ile, pointHorsBord)).toBe(false);
+
+    for (const île of monde.iles) {
+      const surfaceJoueur = hauteurSurfaceIle(île, île.apparitionJoueur.position);
+      expect(surfaceJoueur).toBeDefined();
+      if (surfaceJoueur !== undefined) {
+        expect(île.apparitionJoueur.position.y).toBeGreaterThanOrEqual(surfaceJoueur - 0.05);
+      }
+
+      for (const apparition of île.apparitionsPirates) {
+        const surfacePirate = hauteurSurfaceIle(île, apparition.position);
+        expect(surfacePirate).toBeDefined();
+        if (surfacePirate !== undefined) {
+          expect(apparition.position.y).toBeGreaterThanOrEqual(surfacePirate - 0.05);
+        }
       }
     }
   });
