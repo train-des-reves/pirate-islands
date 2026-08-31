@@ -22,9 +22,26 @@ import {
   genererMonde,
 } from '@pirate/coeur-jeu';
 
+import {
+  cameraBateau,
+  construireBateauBabylon,
+  type BateauBabylon,
+  type ModePresentationBateau,
+} from './bateau';
+
 const SEGMENTS_ILE = 12;
 
-export type ModeCameraMonde = 'ensemble' | 'rivage';
+export type ModeCameraMonde = 'ensemble' | 'rivage' | ModePresentationBateau;
+
+export function estModePresentationBateau(
+  modeCamera: ModeCameraMonde,
+): modeCamera is ModePresentationBateau {
+  return (
+    modeCamera === 'bateau-exterieur' ||
+    modeCamera === 'bateau-cabine' ||
+    modeCamera === 'bateau-cale'
+  );
+}
 
 export interface OptionsMondeBabylon {
   readonly modeCamera?: ModeCameraMonde;
@@ -33,6 +50,7 @@ export interface OptionsMondeBabylon {
 export interface MondeBabylon {
   readonly monde: DescripteurMonde;
   readonly camera: FreeCamera;
+  readonly bateau: BateauBabylon;
   readonly ocean: Mesh;
   readonly terrains: readonly Mesh[];
   readonly rivages: readonly Mesh[];
@@ -352,6 +370,28 @@ function créerCamera(
   return camera;
 }
 
+function positionnerBateauAuQuai(ile: DescripteurIle): {
+  readonly position: Vector3;
+  readonly rotationY: number;
+} {
+  const direction = new Vector3(
+    ile.approche.direction.x,
+    ile.approche.direction.y,
+    ile.approche.direction.z,
+  );
+  const distanceDepuisLeQuai = 3.8;
+  return {
+    position: new Vector3(
+      ile.approche.quai.position.x + direction.x * distanceDepuisLeQuai,
+      0.04,
+      ile.approche.quai.position.z + direction.z * distanceDepuisLeQuai,
+    ),
+    // Le +Z local du bateau regarde vers la proue, perpendiculaire à l’axe
+    // longitudinal du quai (+X local).
+    rotationY: ile.approche.quai.rotationY - Math.PI / 2,
+  };
+}
+
 export function construireMondeBabylon(
   scene: Scene,
   monde: DescripteurMonde = genererMonde(GRAINE_MVP_PAR_DEFAUT),
@@ -379,16 +419,31 @@ export function construireMondeBabylon(
     }
   }
 
+  const premièreIle = monde.iles[0];
+  if (!premièreIle) {
+    throw new Error('Le monde doit contenir une île pour accueillir le bateau.');
+  }
+  const positionBateau = positionnerBateauAuQuai(premièreIle);
+  const bateau = construireBateauBabylon(scene, {
+    id: 'bateau-quai',
+    position: positionBateau.position,
+    rotationY: positionBateau.rotationY,
+  });
   const camera = créerCamera(scene, monde, options.modeCamera ?? 'ensemble');
+  const modeCamera = options.modeCamera ?? 'ensemble';
+  if (estModePresentationBateau(modeCamera)) {
+    cameraBateau(camera, bateau.descripteur, modeCamera);
+  }
   const liberer = (): void => {
     for (const objet of objets) {
       objet.dispose(false, true);
     }
+    bateau.liberer();
     camera.dispose();
     lumière.dispose();
   };
 
-  return { monde, camera, ocean, terrains, rivages, quais, objets, liberer };
+  return { monde, camera, bateau, ocean, terrains, rivages, quais, objets, liberer };
 }
 
 function positionnerMarqueur(
@@ -448,3 +503,4 @@ export function installerMarqueursE2E(
     conteneur.remove();
   };
 }
+

@@ -92,6 +92,18 @@ body {
   display: none;
 }
 
+.scene-shell[data-presentation^='bateau-'] .halo {
+  display: none;
+}
+
+.scene-shell[data-presentation^='bateau-'] .vignette {
+  display: block;
+  background:
+    linear-gradient(90deg, rgba(2, 15, 28, 0.44), transparent 34%),
+    linear-gradient(0deg, rgba(2, 15, 28, 0.34), transparent 38%),
+    radial-gradient(circle at center, transparent 48%, rgba(2, 13, 25, 0.2) 100%);
+}
+
 .interface {
   position: relative;
   z-index: 2;
@@ -107,6 +119,29 @@ body {
   padding-top: clamp(36px, 8vh, 76px);
   padding-left: clamp(32px, 6vw, 76px);
   text-shadow: 0 2px 16px rgba(0, 15, 26, 0.42);
+}
+
+.scene-shell[data-presentation^='bateau-'] .interface {
+  width: min(calc(100% - 48px), 330px);
+  padding-top: 28px;
+  padding-left: 32px;
+}
+
+.scene-shell[data-presentation^='bateau-'] h1 {
+  max-width: 330px;
+  font-size: clamp(2.2rem, 4.5vw, 3.6rem);
+}
+
+.scene-shell[data-presentation^='bateau-'] .tagline {
+  max-width: 285px;
+  margin-top: 14px;
+  font-size: 0.9rem;
+}
+
+.scene-shell[data-presentation^='bateau-'] .status {
+  margin-top: 16px;
+  padding: 9px 13px;
+  font-size: 0.82rem;
 }
 
 .eyebrow {
@@ -412,3 +447,4 @@ h1 {
     bottom: auto;
   }
 }
+

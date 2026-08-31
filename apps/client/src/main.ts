@@ -17,7 +17,12 @@ import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
 import { creerEtatActions, GestionnaireEntrees } from './jeu/entrees';
 import { construireBacASable } from './jeu/monde-test';
 import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
-import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
+import {
+  construireMondeBabylon,
+  estModePresentationBateau,
+  installerMarqueursE2E,
+  type ModeCameraMonde,
+} from './jeu/scene';
 
 import './style.css';
 
@@ -70,7 +75,15 @@ interface JeuClient {
 
 const paramètres = new URLSearchParams(window.location.search);
 const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
-const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
+const cameraDemandée = paramètres.get('camera');
+const modeCamera: ModeCameraMonde =
+  cameraDemandée === 'rivage' ||
+  cameraDemandée === 'bateau-exterieur' ||
+  cameraDemandée === 'bateau-cabine' ||
+  cameraDemandée === 'bateau-cale'
+    ? cameraDemandée
+    : 'ensemble';
+const présentationBateau = estModePresentationBateau(modeCamera);
 const modeMonde = paramètres.has('graine') || paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
@@ -78,6 +91,7 @@ const monde = genererMonde(graine);
 conteneurApplication.dataset.mode = modeMonde ? 'monde' : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
+conteneurApplication.dataset.presentation = présentationBateau ? modeCamera : 'aucune';
 conteneurApplication.dataset.iles = String(monde.iles.length);
 conteneurApplication.dataset.diagnostics = modeMonde && modeE2E ? 'actifs' : 'inactifs';
 conteneurApplication.dataset.pause = 'non';
@@ -93,6 +107,26 @@ if (!modeMonde) {
     ?.replaceChildren('Cliquez dans la scène pour prendre la barre et explorer le bac à sable.');
 }
 
+if (présentationBateau) {
+  const textesPrésentation = {
+    'bateau-exterieur': {
+      eyebrow: 'Bateau de pêche · vue extérieure',
+      tagline: 'Coque, pont, cabine et toit au quai de l’île Aube.',
+    },
+    'bateau-cabine': {
+      eyebrow: 'Bateau de pêche · cabine',
+      tagline: 'Deux hublots, poste de pilotage et pont traversant.',
+    },
+    'bateau-cale': {
+      eyebrow: 'Bateau de pêche · cale',
+      tagline: 'Entrée à l’arrière, escalier et espace accessible sous le pont.',
+    },
+  } as const;
+  const texte = textesPrésentation[modeCamera];
+  document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren(texte.eyebrow);
+  document.querySelector<HTMLElement>('.tagline')?.replaceChildren(texte.tagline);
+}
+
 canvasJeu.width = LARGEUR_REFERENCE;
 canvasJeu.height = HAUTEUR_REFERENCE;
 
@@ -106,11 +140,21 @@ function construireScene(): JeuClient | undefined {
 
     if (modeMonde) {
       const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
-      const retirerMarqueurs = modeE2E
-        ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
-        : undefined;
+      const retirerMarqueurs =
+        modeE2E && !présentationBateau
+          ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
+          : undefined;
 
       scene.executeWhenReady(() => {
+        conteneurApplication.dataset.bateau = mondeBabylon.bateau.descripteur.id;
+        conteneurApplication.dataset.bateauHublots = String(mondeBabylon.bateau.hublots.length);
+        conteneurApplication.dataset.bateauSurfaces = String(mondeBabylon.bateau.surfaces.length);
+        conteneurApplication.dataset.bateauCollisions = String(
+          mondeBabylon.bateau.collisions.length,
+        );
+        conteneurApplication.dataset.bateauAncrages = String(
+          mondeBabylon.bateau.descripteur.ancrages.length,
+        );
         conteneurApplication.dataset.scene = 'ready';
       });
       const boucle = (): void => scene.render();
@@ -362,3 +406,4 @@ async function vérifierServeur(): Promise<void> {
 
 void jeu;
 void vérifierServeur();
+
