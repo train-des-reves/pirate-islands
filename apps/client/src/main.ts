@@ -1,6 +1,7 @@
 import {
   Color3,
   Color4,
+  DirectionalLight,
   Engine,
   FreeCamera,
   HemisphericLight,
@@ -17,6 +18,7 @@ import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
 import { creerEtatActions, GestionnaireEntrees } from './jeu/entrees';
 import { construireBacASable } from './jeu/monde-test';
 import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
+import { construireGaleriePiratesE2E } from './jeu/pirate';
 import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
 
 import './style.css';
@@ -70,21 +72,31 @@ interface JeuClient {
 
 const paramètres = new URLSearchParams(window.location.search);
 const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
+const modePirates = modeE2E && paramètres.get('vue') === 'pirates';
+const animationPirates = modePirates && paramètres.get('animation') === '1';
 const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
 const modeMonde = paramètres.has('graine') || paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
-conteneurApplication.dataset.mode = modeMonde ? 'monde' : 'bac';
+conteneurApplication.dataset.mode = modePirates ? 'pirates' : modeMonde ? 'monde' : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
+conteneurApplication.dataset.vue = modePirates ? 'pirates' : 'standard';
 conteneurApplication.dataset.iles = String(monde.iles.length);
-conteneurApplication.dataset.diagnostics = modeMonde && modeE2E ? 'actifs' : 'inactifs';
+conteneurApplication.dataset.diagnostics =
+  modePirates || (modeMonde && modeE2E) ? 'actifs' : 'inactifs';
 conteneurApplication.dataset.pause = 'non';
 conteneurApplication.dataset.pointeur = 'libere';
 conteneurApplication.dataset.collision = 'aucune';
 
-if (!modeMonde) {
+if (modePirates) {
+  document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Galerie de rendu · MVP-2F');
+  document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('Pirates terrestres');
+  document
+    .querySelector<HTMLElement>('.tagline')
+    ?.replaceChildren('Silhouette procédurale, poses lisibles et interpolation côté client.');
+} else if (!modeMonde) {
   document
     .querySelector<HTMLElement>('.eyebrow')
     ?.replaceChildren('Navigation première personne · MVP-1C');
@@ -103,6 +115,70 @@ function construireScene(): JeuClient | undefined {
       stencil: true,
     });
     const scene = new Scene(moteur);
+
+    if (modePirates) {
+      scene.clearColor = new Color4(0.035, 0.12, 0.17, 1);
+      scene.fogMode = Scene.FOGMODE_EXP2;
+      scene.fogColor = new Color3(0.035, 0.12, 0.17);
+      scene.fogDensity = 0.018;
+
+      const camera = new FreeCamera('camera-galerie-pirates', new Vector3(0, 3.8, -15.5), scene);
+      camera.minZ = 0.1;
+      camera.maxZ = 100;
+      camera.fov = 0.78;
+      camera.setTarget(new Vector3(0, 1.2, 0));
+      scene.activeCamera = camera;
+
+      const lumière = new HemisphericLight(
+        'lumiere-galerie-pirates',
+        new Vector3(-0.25, 1, -0.35),
+        scene,
+      );
+      lumière.intensity = 1.15;
+      lumière.diffuse = new Color3(0.92, 0.96, 1);
+      lumière.groundColor = new Color3(0.08, 0.035, 0.025);
+
+      const lumièreAvant = new DirectionalLight(
+        'lumiere-avant-galerie-pirates',
+        new Vector3(-0.25, -1, 0.55),
+        scene,
+      );
+      lumièreAvant.intensity = 0.7;
+      lumièreAvant.diffuse = new Color3(1, 0.78, 0.58);
+
+      const galerie = construireGaleriePiratesE2E(scene, {
+        afficherEtiquettes: true,
+        animerInterpolation: animationPirates,
+      });
+      let dernierTemps = performance.now();
+
+      scene.executeWhenReady(() => {
+        conteneurApplication.dataset.scene = 'ready';
+      });
+      const boucle = (): void => {
+        const maintenant = performance.now();
+        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
+        dernierTemps = maintenant;
+        galerie.mettreAJour(deltaSecondes);
+        scene.render();
+      };
+      moteur.runRenderLoop(boucle);
+      const redimensionner = (): void => moteur.resize();
+      window.addEventListener('resize', redimensionner);
+
+      return {
+        moteur,
+        detruire: () => {
+          window.removeEventListener('resize', redimensionner);
+          moteur.stopRenderLoop(boucle);
+          galerie.liberer();
+          camera.dispose();
+          lumière.dispose();
+          lumièreAvant.dispose();
+          moteur.dispose();
+        },
+      };
+    }
 
     if (modeMonde) {
       const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });

@@ -109,6 +109,32 @@ body {
   text-shadow: 0 2px 16px rgba(0, 15, 26, 0.42);
 }
 
+.scene-shell[data-mode='pirates'] .interface {
+  width: min(calc(100% - 64px), 720px);
+  padding-top: 30px;
+  padding-left: 42px;
+  text-shadow: 0 2px 18px rgba(0, 15, 26, 0.46);
+}
+
+.scene-shell[data-mode='pirates'] h1 {
+  max-width: 720px;
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+}
+
+.scene-shell[data-mode='pirates'] .tagline {
+  max-width: 560px;
+  margin-top: 12px;
+}
+
+.scene-shell[data-mode='pirates'] .status {
+  margin-top: 16px;
+}
+
+.scene-shell[data-mode='pirates'] .halo,
+.scene-shell[data-mode='pirates'] .coordinates {
+  display: none;
+}
+
 .eyebrow {
   margin: 0 0 12px;
   color: rgba(235, 251, 255, 0.82);
@@ -385,6 +411,46 @@ h1 {
   transform: translateX(-50%) rotate(45deg);
 }
 
+.pirates-e2e {
+  position: absolute;
+  z-index: 3;
+  right: 34px;
+  bottom: 28px;
+  left: 34px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  pointer-events: none;
+}
+
+.pirate-fixture {
+  display: grid;
+  min-height: 34px;
+  place-items: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 232, 168, 0.58);
+  border-radius: 12px;
+  background: rgba(5, 27, 39, 0.74);
+  box-shadow: 0 7px 20px rgba(0, 9, 17, 0.28);
+  color: rgba(255, 246, 212, 0.96);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-align: center;
+  text-shadow: 0 1px 7px rgba(0, 0, 0, 0.55);
+}
+
+.pirate-fixture[data-etat='mort'] {
+  border-color: rgba(219, 223, 228, 0.44);
+  color: rgba(230, 236, 241, 0.82);
+}
+
+.pirate-fixture[data-etat='attaque'] {
+  border-color: rgba(255, 107, 82, 0.76);
+  color: #ffd0a9;
+}
+
 @media (max-width: 640px) {
   .interface {
     width: calc(100% - 48px);
@@ -394,6 +460,24 @@ h1 {
 
   .scene-shell[data-mode='bac'] .interface {
     padding-top: 34px;
+  }
+
+  .scene-shell[data-mode='pirates'] .interface {
+    width: calc(100% - 48px);
+    padding-top: 28px;
+    padding-left: 24px;
+  }
+
+  .pirates-e2e {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    gap: 5px;
+  }
+
+  .pirate-fixture {
+    padding: 7px 4px;
+    font-size: 0.62rem;
   }
 
   .ath {
