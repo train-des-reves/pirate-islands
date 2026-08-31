@@ -465,6 +465,7 @@ function construireScene(): JeuClient | undefined {
     };
 
     reprendreJeuActif = (): void => {
+      boutonReprendreJeu.blur();
       enPause = false;
       verrouillageE2EForce = modeE2E;
       try {
