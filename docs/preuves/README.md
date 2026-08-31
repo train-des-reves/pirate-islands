@@ -103,8 +103,8 @@ La branche produit `pistolet-tir-repos-1280x720.png`, `pistolet-tir-eclair-recul
 ## Preuve des règles de pêche déterministes
 
 Scénario déterministe : ouvrir `/?e2e=1&presentation=regles-peche&graine=peche-mvp-v1`.
-Le harnais présente six lignes — Attente, Morsure, Prise, Trop tôt, Trop tard, Annulation — et
-cinq résultats (`prise`, `trop_tot`, `trop_tard`, `hors_zone`, `annulee`) dérivés de la graine.
+Le harnais présente sept lignes — Attente, Morsure, Prise, Trop tôt, Trop tard, Annulation, Hors zone —
+et cinq résultats (`prise`, `trop_tot`, `trop_tard`, `hors_zone`, `annulee`) dérivés de la graine.
 Le relecteur vérifie l’ordre des phases, les résultats attendus, l’absence d’erreur console et
 que le harnais n’apparaît pas dans la vue normale (`/?e2e=1`).
 

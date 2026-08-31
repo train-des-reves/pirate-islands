@@ -87,6 +87,14 @@ export function construireHarnaisPeche(
     ),
     délai,
   );
+  const horsZone = lancerPeche(
+    ETAT_PECHE_INACTIF,
+    monde,
+    'zone-inconnue',
+    graine,
+    sequence,
+    0,
+  );
 
   const lignes: readonly LignePresentationPeche[] = [
     construireLigne('Attente', attente),
@@ -95,6 +103,7 @@ export function construireHarnaisPeche(
     construireLigne('Trop tôt', tropTot),
     construireLigne('Trop tard', tropTard),
     construireLigne('Annulation', annulation),
+    construireLigne('Hors zone', horsZone),
   ];
 
   return { lignes, graine };

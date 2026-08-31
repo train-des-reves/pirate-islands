@@ -1,5 +1,6 @@
 import type { Point3D } from './index.js';
 import { hauteurSurfaceIle, type DescripteurIle } from './monde.js';
+import { figerProfondément } from './immuable.js';
 
 export const DELAI_MORSURE_MIN_MS = 500;
 export const DELAI_MORSURE_MAX_MS = 5000;
@@ -46,18 +47,18 @@ export interface EtatPeche {
   readonly taille?: number;
 }
 
-export const ESPECES_POISSON: readonly EspecePecheDefinie[] = [
+export const ESPECES_POISSON: readonly EspecePecheDefinie[] = figerProfondément([
   { id: 'sardine', nom: 'Sardine', tailleMin: 12, tailleMax: 24 },
   { id: 'maquereau', nom: 'Maquereau', tailleMin: 30, tailleMax: 60 },
   { id: 'thon', nom: 'Thon', tailleMin: 90, tailleMax: 220 },
-];
+]);
 
-export const ETAT_PECHE_INACTIF: EtatPeche = {
+export const ETAT_PECHE_INACTIF: EtatPeche = figerProfondément({
   phase: 'inactive',
   sequence: 0,
   lanceAuMs: 0,
   tempsCourantMs: 0,
-};
+});
 
 function entierGraine(graine: string): number {
   let hash = 2166136261;
@@ -175,7 +176,7 @@ export function avancerPeche(etat: EtatPeche, temps: number): EtatPeche {
   const fenetre = etat.fenetreMorsureMs ?? 0;
   const finMorsure = etat.lanceAuMs + delai + fenetre;
 
-  if (temps >= finMorsure) {
+  if (temps > finMorsure) {
     return terminer(etat, 'trop_tard', temps);
   }
   if (temps >= etat.lanceAuMs + delai) {

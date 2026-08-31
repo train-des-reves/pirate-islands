@@ -1,9 +1,15 @@
 import type { Point3D } from './index.js';
 import type { ZonePeche } from './peche.js';
+import { figerProfondément } from './immuable.js';
 
 export const GRAINE_MVP_PAR_DEFAUT = 'mvp-defaut';
 export const NOMBRE_ILES_MVP = 3;
 export const GRAINE_MVP = GRAINE_MVP_PAR_DEFAUT;
+
+export const FACTEUR_DISTANCE_ZONE_RIVAGE = 1.12;
+export const RAYON_ZONE_RIVAGE = 3.2;
+export const FACTEUR_CENTRE_ZONE_QUAI = 0.35;
+export const RAYON_ZONE_QUAI = 2.4;
 
 export type FormeIle = 'anse' | 'falaise' | 'cratere';
 
@@ -164,20 +170,6 @@ const OCEAN_MVP: DescripteurOcean = {
   profondeur: 220,
   hauteur: 0,
 };
-
-function figerProfondément<T>(valeur: T): T {
-  if (typeof valeur !== 'object' || valeur === null || Object.isFrozen(valeur)) {
-    return valeur;
-  }
-
-  for (const enfant of Object.values(valeur)) {
-    if (typeof enfant === 'object' && enfant !== null) {
-      figerProfondément(enfant);
-    }
-  }
-
-  return Object.freeze(valeur);
-}
 
 function entierGraine(graine: string): number {
   let hash = 2166136261;
@@ -481,16 +473,16 @@ function créerZonesPeche(iles: readonly DescripteurIle[]): readonly ZonePeche[]
 function créerZoneRivage(ile: DescripteurIle): ZonePeche {
   const direction = ile.approche.direction;
   const centre = {
-    x: ile.transformation.position.x + direction.x * (ile.rayonX * 1.12),
+    x: ile.transformation.position.x + direction.x * (ile.rayonX * FACTEUR_DISTANCE_ZONE_RIVAGE),
     y: ile.transformation.position.y,
-    z: ile.transformation.position.z + direction.z * (ile.rayonZ * 1.12),
+    z: ile.transformation.position.z + direction.z * (ile.rayonZ * FACTEUR_DISTANCE_ZONE_RIVAGE),
   };
   return {
     id: `zone-rivage-${ile.id}`,
     ileId: ile.id,
     type: 'rivage',
     centre,
-    rayon: 3.2,
+    rayon: RAYON_ZONE_RIVAGE,
     nom: `${ile.nom} — rivage`,
   };
 }
@@ -499,16 +491,16 @@ function créerZoneQuai(ile: DescripteurIle): ZonePeche {
   const quai = ile.approche.quai;
   const direction = ile.approche.direction;
   const centre = {
-    x: quai.position.x + direction.x * (quai.longueur * 0.35),
+    x: quai.position.x + direction.x * (quai.longueur * FACTEUR_CENTRE_ZONE_QUAI),
     y: ile.transformation.position.y,
-    z: quai.position.z + direction.z * (quai.longueur * 0.35),
+    z: quai.position.z + direction.z * (quai.longueur * FACTEUR_CENTRE_ZONE_QUAI),
   };
   return {
     id: `zone-quai-${ile.id}`,
     ileId: ile.id,
     type: 'quai',
     centre,
-    rayon: 2.4,
+    rayon: RAYON_ZONE_QUAI,
     nom: `${ile.nom} — quai`,
   };
 }

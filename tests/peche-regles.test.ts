@@ -245,4 +245,12 @@ describe('règles déterministes de pêche', () => {
     expect(module).toBeDefined();
     expect(ESPECES_POISSON).toHaveLength(3);
   });
+
+  it('fige les catalogues et l’état inactif au runtime', () => {
+    expect(Object.isFrozen(ESPECES_POISSON)).toBe(true);
+    expect(Object.isFrozen(ESPECES_POISSON[0])).toBe(true);
+    expect(Object.isFrozen(ESPECES_POISSON[1])).toBe(true);
+    expect(Object.isFrozen(ESPECES_POISSON[2])).toBe(true);
+    expect(Object.isFrozen(ETAT_PECHE_INACTIF)).toBe(true);
+  });
 });

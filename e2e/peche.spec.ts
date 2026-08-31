@@ -16,7 +16,7 @@ test('affiche les phases et résultats de pêche pour la graine peche-mvp-v1', a
   await expect(page.getByTestId('presentation-peche-graine')).toHaveText('Graine : peche-mvp-v1');
 
   const lignes = page.getByTestId('presentation-peche-ligne');
-  await expect(lignes).toHaveCount(6);
+  await expect(lignes).toHaveCount(7);
 
   const contenu = await lignes.allTextContents();
   const phaseScenarios = contenu.map((ligne) => ligne.replace(/\s+/g, ' ').trim());
@@ -28,11 +28,13 @@ test('affiche les phases et résultats de pêche pour la graine peche-mvp-v1', a
   expect(scenario(3)).toContain('Trop tôt');
   expect(scenario(4)).toContain('Trop tard');
   expect(scenario(5)).toContain('Annulation');
+  expect(scenario(6)).toContain('Hors zone');
 
   expect(scenario(2)).toContain('prise');
   expect(scenario(3)).toContain('trop_tot');
   expect(scenario(4)).toContain('trop_tard');
   expect(scenario(5)).toContain('annulee');
+  expect(scenario(6)).toContain('hors_zone');
 
   await expect(page).toHaveScreenshot('peche-regles-1280x720.png', {
     animations: 'disabled',

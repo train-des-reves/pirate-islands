@@ -13,6 +13,22 @@
   text-rendering: optimizeLegibility;
 }
 
+@font-face {
+  font-family: 'Source Code Pro E2E';
+  src: url('/fonts/SourceCodePro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Source Code Pro E2E';
+  src: url('/fonts/SourceCodePro-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1021,6 +1037,10 @@ h1 {
   background: rgba(5, 34, 51, 0.92);
   box-shadow: 0 22px 80px rgba(0, 0, 0, 0.32);
   transform: translate(-50%, -50%);
+  font-family: 'Source Code Pro E2E', ui-monospace, monospace;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .presentation-peche h2 {
