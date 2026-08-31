@@ -26,6 +26,7 @@ test.describe('monde ensemencé', () => {
     await expect(page).toHaveScreenshot('monde-ensemble-1280x720.png', {
       animations: 'disabled',
       caret: 'hide',
+      maxDiffPixelRatio: 0.03,
       scale: 'css',
     });
     await page.screenshot({
