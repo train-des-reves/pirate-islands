@@ -5,6 +5,8 @@ export const SANTE_JOUEUR_MAXIMALE = 100;
 export const SANTE_BATEAU_MAXIMALE = 100;
 export const SANTE_PIRATE_MAXIMALE = 100;
 export const GRAINE_PAR_DEFAUT = 'mvp-defaut';
+export const PHASE_SALLE_ATTENTE = 'attente';
+export const PHASE_SALLE_PARTIE = 'partie';
 
 export const TransformationSchema = schema(
   {

@@ -22,4 +22,5 @@ export function creerPoint3D(x: number, y: number, z: number): Point3D {
   return { x, y, z };
 }
 
+export * from './combat.js';
 export * from './monde.js';
