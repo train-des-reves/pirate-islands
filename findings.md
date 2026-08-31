@@ -8,6 +8,7 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 
 - Un surveillant lancé comme sous-agent ne pouvait pas faire remonter l’état de ses exécuteurs via le canal app-server direct ; les exécuteurs s’arrêtaient avant modification.
 - Solution : coordination par tâche planifiée toutes les cinq minutes, sans surveillant permanent, et retour obligatoire via `multi_agent_v1__send_input`. La règle est inscrite dans `AGENTS.md` et dans l’automatisation.
+- Nouvelle règle : l’exécuteur lance lui-même la revue Terra de sa PR, annonce l’`Entrée en revue`, boucle avec le même reviewer sur chaque head et transmet un `Go final` explicite. Le surveillant fusionne seulement après ce go, la CI verte, le verdict favorable sur le head exact et la preuve cohérente.
 
 ### Isolation Git et worktrees
 
@@ -35,6 +36,7 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 - Après la synchronisation, la CI #22 a reproduit sur Ubuntu un déplacement trop lent : le delta de rendu plafonné à 0,05 s ne simulait pas assez de temps réel et l’E2E restait sur `sol` au lieu d’atteindre `mur`. Solution : simulation à pas fixe de 50 ms avec accumulateur borné à 250 ms (`303a7ef`), régression sur frames lentes, puis CI #18 entièrement verte.
 - Les captures #22 ont été remplacées depuis le head final `303a7ef` dans `mvp-1b-pr22-preuve` (deux PNG `image/png`, URLs `browser_download_url` absolues). La PR #22 a été fusionnée sous `ae2a0f5` ; `main` a été avancé en fast-forward.
 - La preuve documentaire a ensuite été republiée dans `mvp-docs-pr24-preuve-626910f` depuis le head `626910f`; CI #20 et le recontrôle Terra sont favorables. La PR #24 a été fusionnée sous `d096f50`, puis l’issue #25 a été fermée.
+- La PR #30 de l’issue #5 a publié six preuves bateau mais sa CI `33396133967` échoue sur la comparaison historique `e2e/monde.spec.ts` (14 533 pixels différents, ratio 0,02) alors que les trois scénarios bateau passent ; la PR reste bloquée jusqu’au diagnostic et au correctif de la régression, sans affaiblir la baseline monde.
 
 ## État des exécuteurs et des PR
 
@@ -45,5 +47,10 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 | Revue PR #22 | Archivée après fusion | Terra `medium` a d’abord demandé les corrections collision/seuil et le diagnostic E2E ; recontrôle final FAVORABLE sur `303a7ef`, CI #18 verte, preuves release et absence de conflit. |
 | Revue PR #23 | Archivée après fusion | Verdict Terra `medium` favorable, avec un point P2 d’accessibilité hors blocage ; tâche archivée après fusion. |
 | PR #24 documentation | Fusionnée — suivi terminé | Head `626910f`, release `mvp-docs-pr24-preuve-626910f`, CI #20 verte et verdict Terra FAVORABLE ; fusion `d096f50`, issue #25 fermée, reviewer archivé. |
+| PR #26 acteur pirate | Ouverte — go exécuteur attendu | Head `869f316`, CI `33391934291` verte, release `mvp-2f-pr8-preuve-869f316` vérifiée, reviewer Terra FAVORABLE ; l’exécuteur #8 doit encore transmettre l’`Entrée en revue` et le `Go final` formels selon le nouveau protocole. |
+| PR #27 pistolet | Fusionnée — suivi à archiver | Head `65ce1b4`, CI `33392373483` verte, revue Terra APPROUVABLE, fusion GitHub `cfa0d654`, issue #6 fermée ; l’archivage de l’exécuteur/reviewer reste à effectuer. |
+| PR #28 réglages | Ouverte — correction en revue | Head `9890514`, CI `33393655971` verte et PR CLEAN ; Terra demande le rejet strict des champs inconnus du cookie à la racine et dans `liaisons`, avec tests de régression. #9 a envoyé son `Entrée en revue` et corrige uniquement les deux fichiers ciblés ; pas de go final. |
+| PR #29 salle Colyseus | Ouverte — correction en revue | Head `ae1a64c`, CI `33393144041` verte mais PR CONFLICTING/DIRTY ; Terra demande une resynchronisation avec `origin/main` et l’isolation des changements hors périmètre (`AGENTS.md`, décision monde, E2E monde, baseline, configuration, findings). #2 a envoyé son `Entrée en revue` et traite ces findings ; pas de go final. |
+| PR #30 bateau | Ouverte — CI rouge | Head `7adf297`, CI `33396133967` échoue sur la baseline monde historique ; les trois tests bateau passent. Aucun reviewer ni go final avant correction et CI verte. |
 
-Dernier état connu : #22 est fusionnée sous `ae2a0f5`, l’issue #3 est fermée et l’exécuteur/reviewer sont archivés ; #23 est fusionnée et #4 fermée ; #24 est fusionnée sous `d096f50`, #25 fermée et son reviewer archivé. Il n’y a actuellement aucune issue prête sans branche/PR active ; les anciennes tentatives et le worktree `2acb` restent conservés pour ne pas écraser de travail utilisateur.
+Dernier état connu : #22 est fusionnée sous `ae2a0f5`, #23 est fusionnée, #24 est fusionnée sous `d096f50`, et #27 vient d’être fusionnée sous `cfa0d654` avec #6 fermée. #26 attend le go formel de #8 ; #28 et #29 ont des changements demandés ; #30 est bloquée par sa CI rouge. Les anciennes tentatives et le worktree `2acb` restent conservés pour ne pas écraser de travail utilisateur.
