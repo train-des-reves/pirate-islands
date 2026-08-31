@@ -68,6 +68,31 @@ async function attendreNombreJoueurs(
   });
 }
 
+async function attendreCondition(
+  salle: Room<unknown, EtatSalle>,
+  prédicat: () => boolean,
+  message: string,
+): Promise<void> {
+  if (prédicat()) {
+    return;
+  }
+  await new Promise<void>((résoudre, rejeter) => {
+    const délai = setTimeout(() => {
+      salle.onStateChange.remove(observer);
+      rejeter(new Error('Délai dépassé : ' + message));
+    }, 5_000);
+    const observer = (): void => {
+      if (!prédicat()) {
+        return;
+      }
+      clearTimeout(délai);
+      salle.onStateChange.remove(observer);
+      résoudre();
+    };
+    salle.onStateChange(observer);
+  });
+}
+
 describe('SalleJeu Colyseus', () => {
   it('crée deux identités serveur distinctes et synchronise leur apparition', async () => {
     const premierClient = await ouvrirClient();
@@ -155,5 +180,85 @@ describe('SalleJeu Colyseus', () => {
 
     await expect(départ).resolves.toBe(4003);
     sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
+  it('synchronise la transformation du joueur émetteur uniquement', async () => {
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient);
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId);
+
+    await attendreNombreJoueurs(premièreSalle, 2);
+    await attendreNombreJoueurs(secondeSalle, 2);
+
+    secondeSalle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: 42, y: 3, z: -7 },
+      lacet: 1.5,
+      tangage: -0.5,
+      roulis: 0.25,
+      horodatage: 1_000,
+    });
+
+    await attendreCondition(
+      premièreSalle,
+      () => premièreSalle.state.joueurs.get(secondeSalle.sessionId)?.transformation.x === 42,
+      'la transformation du second joueur n’a pas été synchronisée',
+    );
+
+    const joueurLocal = premièreSalle.state.joueurs.get(premièreSalle.sessionId);
+    const joueurSecond = premièreSalle.state.joueurs.get(secondeSalle.sessionId);
+    expect(joueurSecond?.transformation.x).toBe(42);
+    expect(joueurSecond?.transformation.y).toBe(3);
+    expect(joueurSecond?.transformation.z).toBe(-7);
+    expect(joueurSecond?.transformation.lacet).toBeCloseTo(1.5);
+    expect(joueurLocal?.transformation.x).not.toBe(42);
+  });
+
+  it('rejette une transformation contenant un champ sessionId usurpé', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    const départ = new Promise<number>((résoudre) => salle.onLeave.once(résoudre));
+
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      sessionId: 'session-usurpée',
+      position: { x: 42, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 1_000,
+    });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
+  it('ignore une transformation à vitesse manifestement impossible', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    const sessionId = salle.sessionId;
+
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: 0, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 1_000,
+    });
+    await attendreCondition(
+      salle,
+      () => salle.state.joueurs.get(sessionId)?.transformation.x === 0,
+      'la première transformation n’a pas été appliquée',
+    );
+
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: 1_000, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 1_010,
+    });
+
+    await new Promise((résoudre) => setTimeout(résoudre, 300));
+    expect(salle.state.joueurs.get(sessionId)?.transformation.x).toBe(0);
   });
 });

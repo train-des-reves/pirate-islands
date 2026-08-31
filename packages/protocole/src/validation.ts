@@ -1,9 +1,11 @@
-import type { MessagePing } from './messages.js';
+import type { MessagePing, MessageTransformationJoueur } from './messages.js';
 
 export const TAILLE_MAX_GRAINE = 64;
 export const TAILLE_MAX_IDENTIFIANT = 128;
 export const TAILLE_MAX_NOM = 32;
 export const LIMITE_HORODATAGE = 4_102_444_800_000;
+export const POSITION_MAXIMALE = 10_000;
+export const VITESSE_MAXIMALE_JOUEUR = 20;
 
 export interface OptionsConnexion {
   readonly graine?: string;
@@ -99,6 +101,89 @@ export function validerMessagePing(valeur: unknown): ResultatValidation<MessageP
 
 export function estMessagePingValide(valeur: unknown): valeur is MessagePing {
   return validerMessagePing(valeur).valide;
+}
+
+function estNombreBorné(valeur: unknown, maximum: number): valeur is number {
+  return typeof valeur === 'number' && Number.isFinite(valeur) && Math.abs(valeur) <= maximum;
+}
+
+function estAngleBorné(valeur: unknown): valeur is number {
+  return (
+    typeof valeur === 'number' &&
+    Number.isFinite(valeur) &&
+    Math.abs(valeur) <= Math.PI * 2 + 0.001
+  );
+}
+
+function estPositionValide(valeur: unknown): valeur is MessageTransformationJoueur['position'] {
+  if (!estObjetSimple(valeur)) {
+    return false;
+  }
+
+  const position = valeur as Record<string, unknown>;
+  return (
+    possedeUniquement(position, ['x', 'y', 'z']) &&
+    estNombreBorné(position.x, POSITION_MAXIMALE) &&
+    estNombreBorné(position.y, POSITION_MAXIMALE) &&
+    estNombreBorné(position.z, POSITION_MAXIMALE)
+  );
+}
+
+export function validerMessageTransformationJoueur(
+  valeur: unknown,
+): ResultatValidation<MessageTransformationJoueur> {
+  if (!estObjetSimple(valeur)) {
+    return resultatErreur('La transformation de joueur doit être un objet.');
+  }
+
+  if (
+    !possedeUniquement(valeur, ['position', 'lacet', 'tangage', 'roulis', 'horodatage']) ||
+    !('position' in valeur) ||
+    !('lacet' in valeur) ||
+    !('tangage' in valeur) ||
+    !('roulis' in valeur) ||
+    !('horodatage' in valeur)
+  ) {
+    return resultatErreur(
+      'La transformation de joueur doit contenir uniquement position, lacet, tangage, roulis et horodatage.',
+    );
+  }
+
+  if (!estPositionValide(valeur.position)) {
+    return resultatErreur('La position de la transformation de joueur est invalide.');
+  }
+
+  if (!estAngleBorné(valeur.lacet) || !estAngleBorné(valeur.tangage) || !estAngleBorné(valeur.roulis)) {
+    return resultatErreur('Les angles de la transformation de joueur sont invalides.');
+  }
+
+  if (
+    typeof valeur.horodatage !== 'number' ||
+    !Number.isFinite(valeur.horodatage) ||
+    !Number.isSafeInteger(valeur.horodatage) ||
+    valeur.horodatage < 0 ||
+    valeur.horodatage > LIMITE_HORODATAGE
+  ) {
+    return resultatErreur('L’horodatage de la transformation de joueur est invalide ou trop grand.');
+  }
+
+  const position = valeur.position as MessageTransformationJoueur['position'];
+  return {
+    valide: true,
+    valeur: {
+      position: { x: position.x, y: position.y, z: position.z },
+      lacet: valeur.lacet,
+      tangage: valeur.tangage,
+      roulis: valeur.roulis,
+      horodatage: valeur.horodatage,
+    },
+  };
+}
+
+export function estMessageTransformationJoueurValide(
+  valeur: unknown,
+): valeur is MessageTransformationJoueur {
+  return validerMessageTransformationJoueur(valeur).valide;
 }
 
 export function validerIdentifiantSalle(valeur: unknown): ResultatValidation<string> {
