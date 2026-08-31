@@ -6,11 +6,13 @@ import type { Request, Response } from 'express';
 
 import { creerReponseSante, NOM_SALLE_JEU } from '@pirate/protocole';
 
-import { SalleJeu } from './salles/salle-jeu.js';
+import { SalleJeu, définirModeE2EServeur } from './salles/salle-jeu.js';
 
 export interface OptionsServeur {
   readonly host?: string;
   readonly port?: number;
+  /** Active le mannequin de dégâts E2E réservé aux tests. */
+  readonly modeE2E?: boolean;
 }
 
 export interface ServeurDemarre {
@@ -25,6 +27,8 @@ export interface ServeurDemarre {
 export async function démarrerServeur(options: OptionsServeur = {}): Promise<ServeurDemarre> {
   const host = options.host ?? process.env.SERVER_HOST ?? '127.0.0.1';
   const port = options.port ?? Number.parseInt(process.env.SERVER_PORT ?? '2567', 10);
+  const modeE2E = options.modeE2E ?? process.env.SERVER_E2E === '1';
+  définirModeE2EServeur(modeE2E);
   const http = createServer();
   const transport = new WebSocketTransport({ server: http });
   const colyseus = new ServeurColyseus({

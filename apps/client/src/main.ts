@@ -126,6 +126,20 @@ const diagnosticNombreJoueurs = document.querySelector<HTMLElement>(
 const diagnosticSalleErreur = document.querySelector<HTMLElement>(
   '[data-testid="diagnostic-salle-erreur"]',
 );
+const combatCible = document.querySelector<HTMLElement>('[data-testid="combat-cible"]');
+const combatSanteJoueur = document.querySelector<HTMLElement>(
+  '[data-testid="combat-sante-joueur"]',
+);
+const combatSantePirate = document.querySelector<HTMLElement>(
+  '[data-testid="combat-sante-pirate"]',
+);
+const combatReapparition = document.querySelector<HTMLElement>(
+  '[data-testid="combat-reapparition"]',
+);
+const combatResultat = document.querySelector<HTMLElement>('[data-testid="combat-resultat"]');
+const combatDeconnexion = document.querySelector<HTMLElement>(
+  '[data-testid="combat-deconnexion"]',
+);
 const diagnosticTir = document.querySelector<HTMLElement>('[data-testid="tir-diagnostic"]');
 const panneauAccueil = document.querySelector<HTMLElement>('[data-testid="panneau-accueil"]');
 const formulaireConnexion = document.querySelector<HTMLFormElement>(
@@ -166,6 +180,12 @@ if (
   !diagnosticSessionId ||
   !diagnosticNombreJoueurs ||
   !diagnosticSalleErreur ||
+  !combatCible ||
+  !combatSanteJoueur ||
+  !combatSantePirate ||
+  !combatReapparition ||
+  !combatResultat ||
+  !combatDeconnexion ||
   !diagnosticTir ||
   !panneauAccueil ||
   !formulaireConnexion ||
@@ -358,6 +378,12 @@ const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
   sessionId: diagnosticSessionId,
   nombreJoueurs: diagnosticNombreJoueurs,
   erreur: diagnosticSalleErreur,
+  cible: combatCible,
+  santeJoueur: combatSanteJoueur,
+  santePirate: combatSantePirate,
+  reapparition: combatReapparition,
+  resultat: combatResultat,
+  deconnexion: combatDeconnexion,
 };
 const indicateurTir = diagnosticTir;
 const panneauAccueilElement = panneauAccueil;
@@ -402,6 +428,26 @@ declare global {
       avancerTemps: (deltaMs: number) => void;
       lireEtatViseurIa?: () => EtatVisualiseurIa;
       afficherInstantViseurIa?: (instant: number) => void;
+      /** Émet une intention de tir réseau vers le serveur (mode salle). */
+      tirerReseau?: (cibleId?: string) => void;
+      /** Émet une intention de tir volontairement dans le vide (mode salle). */
+      tirerDansLeVide?: () => void;
+      /** Rejoue la dernière intention avec la même séquence pour vérifier le rejet serveur. */
+      rejouerTir?: () => void;
+      /** Inflige des dégâts au joueur via le mannequin E2E serveur. */
+      infligerDegatsE2E?: (degats: number) => void;
+      /** Lit l'état de combat observé après synchronisation serveur. */
+      lireCombat?: () => {
+        readonly cibleId: string | null;
+        readonly santeJoueur: number;
+        readonly santePirate: number;
+        readonly pirateNeutralise: boolean;
+        readonly enAttenteReapparition: boolean;
+        readonly dernierResultat: unknown;
+        readonly codeDeconnexion: number | undefined;
+      };
+      /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
+      lireDeconnexion?: () => number | undefined;
     };
   }
 }
@@ -425,6 +471,7 @@ const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
+const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
 const cameraDemandée = paramètres.get('camera');
 const modeCamera: ModeCameraMonde =
   cameraDemandée === 'rivage' ||
@@ -1190,6 +1237,36 @@ if (modeDiagnosticSalle) {
   )
     .then((connexion) => {
       diagnosticSalleConnecte = connexion;
+      if (modeCombatE2E) {
+        window.__pirateIslandsE2E = {
+          verrouillerPointeur: () => undefined,
+          libererPointeur: () => undefined,
+          lireEtat: () => ({
+            position: { x: 0, y: 0, z: 0 },
+            camera: { lacet: 0, tangage: 0 },
+            pause: false,
+            pointeurVerrouille: false,
+            collision: 'aucune',
+            reglages: reglages.applique,
+            tir: {
+              compteur: 0,
+              etat: { recul: 0, eclairBouche: false },
+              derniereIntention: undefined,
+              intentions: [],
+            },
+          }),
+          lireReglages: () => reglages.applique,
+          reinitialiser: () => undefined,
+          tirer: () => undefined,
+          avancerTemps: () => undefined,
+          tirerReseau: connexion.tirer,
+          tirerDansLeVide: connexion.tirerDansLeVide,
+          rejouerTir: connexion.rejouerDernierTir,
+          infligerDegatsE2E: connexion.infligerDegatsE2E,
+          lireCombat: connexion.lireCombat,
+          lireDeconnexion: connexion.lireDeconnexion,
+        };
+      }
     })
     .catch((erreur: unknown) => {
       afficherErreurDiagnosticSalle(erreur, elementsDiagnosticSalle);

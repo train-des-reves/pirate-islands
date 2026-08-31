@@ -75,6 +75,9 @@ importers:
       '@colyseus/ws-transport':
         specifier: 0.18.2
         version: 0.18.2(@colyseus/core@0.18.10)(express@5.1.0(supports-color@10.2.2))
+      '@pirate/coeur-jeu':
+        specifier: workspace:*
+        version: link:../../packages/coeur-jeu
       '@pirate/protocole':
         specifier: workspace:*
         version: link:../../packages/protocole
