@@ -20,7 +20,11 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'off',
     launchOptions: {
-      args: ['--use-angle=swiftshader'],
+      args: [
+        '--use-angle=swiftshader',
+        '--font-render-hinting=none',
+        '--disable-lcd-text',
+      ],
     },
   },
   webServer: {
