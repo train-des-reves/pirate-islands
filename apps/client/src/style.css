@@ -165,6 +165,229 @@ body {
   margin-top: 16px;
 }
 
+.scene-shell[data-mode='ia'] .interface,
+.scene-shell[data-mode='ia'] .ath,
+.scene-shell[data-mode='ia'] .halo,
+.scene-shell[data-mode='ia'] .coordinates,
+.scene-shell[data-mode='ia'] .status,
+.scene-shell[data-mode='ia'] .crosshair {
+  display: none;
+}
+
+.scene-shell[data-mode='ia'] #scene-canvas {
+  opacity: 0;
+}
+
+.ia-visualiseur {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 26px 34px 24px;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(20, 66, 96, 0.62), transparent 46%),
+    linear-gradient(180deg, #05243c 0%, #062033 100%);
+  color: #eefaff;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+.ia-visualiseur__entete {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ia-visualiseur__eyebrow {
+  margin: 0 0 6px;
+  color: rgba(154, 221, 244, 0.76);
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.ia-visualiseur__titre {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+}
+
+.ia-visualiseur__sous-titre {
+  max-width: 620px;
+  margin: 9px 0 0;
+  color: rgba(222, 246, 255, 0.78);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.ia-visualiseur__sous-titre code {
+  padding: 2px 6px;
+  border: 1px solid rgba(143, 227, 255, 0.32);
+  border-radius: 6px;
+  background: rgba(9, 45, 67, 0.6);
+  color: #bceeff;
+  font-size: 0.8rem;
+}
+
+.ia-visualiseur__etat {
+  flex: 0 0 auto;
+  min-width: 148px;
+  margin: 0;
+  padding: 15px 20px;
+  border: 1px solid rgba(255, 232, 168, 0.5);
+  border-radius: 16px;
+  background: rgba(8, 36, 54, 0.82);
+  box-shadow: 0 10px 30px rgba(0, 11, 20, 0.3);
+  color: #fff4cf;
+  font-size: 1.12rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-shadow: 0 1px 7px rgba(0, 0, 0, 0.5);
+}
+
+.ia-visualiseur__etat[data-etat='poursuite'] {
+  border-color: rgba(143, 227, 255, 0.72);
+  color: #c7efff;
+}
+
+.ia-visualiseur__etat[data-etat='attaque'] {
+  border-color: rgba(255, 122, 92, 0.82);
+  color: #ffd0a9;
+}
+
+.ia-visualiseur__etat[data-etat='retour'] {
+  border-color: rgba(255, 217, 138, 0.72);
+  color: #ffe6ad;
+}
+
+.ia-visualiseur__etat[data-etat='mort'] {
+  border-color: rgba(219, 223, 228, 0.5);
+  color: rgba(230, 236, 241, 0.86);
+}
+
+.ia-visualiseur__tableau {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+}
+
+.ia-visualiseur__canevas {
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(143, 227, 255, 0.2);
+  border-radius: 18px;
+  background: #062033;
+  box-shadow: inset 0 0 60px rgba(3, 20, 33, 0.7), 0 14px 44px rgba(0, 10, 19, 0.3);
+}
+
+.ia-visualiseur__legende {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(143, 227, 255, 0.2);
+  border-radius: 18px;
+  background: rgba(6, 30, 46, 0.72);
+}
+
+.ia-visualiseur__mesure {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgba(143, 227, 255, 0.12);
+}
+
+.ia-visualiseur__libelle {
+  color: rgba(196, 232, 249, 0.66);
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ia-visualiseur__mesure strong {
+  color: #d8f4ff;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ia-visualiseur__mesure--large {
+  display: block;
+}
+
+.ia-visualiseur__jauge {
+  height: 9px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(143, 227, 255, 0.14);
+}
+
+.ia-visualiseur__jauge-remplissage {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7fd8f5, #ffb37f);
+  transition: width 60ms linear;
+}
+
+.ia-visualiseur__mesure--chronologie {
+  display: block;
+}
+
+.ia-visualiseur__chronologie {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ia-visualiseur__chronologie li {
+  padding: 5px 9px;
+  border: 1px solid rgba(143, 227, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(9, 45, 67, 0.6);
+  color: #bceeff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ia-visualiseur__chronologie li[data-etat='poursuite'] {
+  border-color: rgba(143, 227, 255, 0.62);
+}
+
+.ia-visualiseur__chronologie li[data-etat='attaque'] {
+  border-color: rgba(255, 122, 92, 0.72);
+  color: #ffcd9f;
+}
+
+.ia-visualiseur__chronologie li[data-etat='retour'] {
+  border-color: rgba(255, 217, 138, 0.62);
+  color: #ffe0a0;
+}
+
 .scene-shell[data-mode='pirates'] .halo,
 .scene-shell[data-mode='pirates'] .coordinates {
   display: none;
