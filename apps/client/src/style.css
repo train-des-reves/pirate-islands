@@ -1374,6 +1374,120 @@ h1 {
   color: rgba(232, 250, 255, 0.88);
 }
 
+.presentation-canne {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: min(calc(100% - 64px), 820px);
+  padding: 30px 34px;
+  border: 1px solid rgba(221, 249, 255, 0.38);
+  border-radius: 20px;
+  background: rgba(5, 34, 51, 0.92);
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.32);
+  transform: translate(-50%, -50%);
+  font-family: 'Source Code Pro E2E', ui-monospace, monospace;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.presentation-canne h2 {
+  margin: 0;
+  font-size: 1.9rem;
+  letter-spacing: -0.04em;
+}
+
+.presentation-canne-graine,
+.presentation-canne-zone {
+  margin: 8px 0 22px;
+  color: rgba(229, 249, 255, 0.72);
+  font-size: 0.86rem;
+  letter-spacing: 0.04em;
+}
+
+.presentation-canne-zone {
+  margin: 18px 0 0;
+}
+
+.presentation-canne-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.presentation-canne-table th,
+.presentation-canne-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(221, 249, 255, 0.16);
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.presentation-canne-table thead th {
+  color: rgba(223, 250, 255, 0.68);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.presentation-canne-table tbody th {
+  color: #fff8d5;
+  font-weight: 700;
+}
+
+.presentation-canne-table tbody td {
+  color: rgba(232, 250, 255, 0.88);
+}
+
+.peche-invite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 248, 213, 0.42);
+  border-radius: 10px;
+  background: rgba(5, 34, 51, 0.82);
+  color: #fff8d5;
+  font-family: 'Source Code Pro', ui-monospace, monospace;
+  font-size: 0.88rem;
+}
+
+.peche-invite[hidden] {
+  display: none;
+}
+
+.peche-invite-touche {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 248, 213, 0.55);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: rgba(255, 248, 213, 0.12);
+  font: inherit;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.peche-statut {
+  margin: 4px 0 0;
+  padding: 6px 12px;
+  border-left: 3px solid rgba(255, 248, 213, 0.7);
+  background: rgba(5, 34, 51, 0.72);
+  color: rgba(232, 250, 255, 0.9);
+  font-family: 'Source Code Pro', ui-monospace, monospace;
+  font-size: 0.84rem;
+}
+
+.peche-statut[hidden] {
+  display: none;
+}
+
 .bateaux-pirates-e2e {
   position: absolute;
   z-index: 3;
