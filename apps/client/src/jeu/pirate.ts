@@ -743,6 +743,7 @@ export const FIXTURES_PIRATES = [
 export interface OptionsGaleriePiratesE2E {
   readonly animerInterpolation?: boolean;
   readonly afficherEtiquettes?: boolean;
+  readonly afficherPlanche?: boolean;
 }
 
 export interface GaleriePiratesE2E {
@@ -752,16 +753,350 @@ export interface GaleriePiratesE2E {
   liberer: () => void;
 }
 
-function installerEtiquettesPiratesE2E(afficher: boolean): { readonly retirer: () => void } {
+type AttributsSvg = Readonly<Record<string, string | number>>;
+
+const ESPACE_NOMS_SVG = 'http://www.w3.org/2000/svg';
+
+function ajouterElementSvg(parent: SVGElement, nom: string, attributs: AttributsSvg): SVGElement {
+  const élément = document.createElementNS(ESPACE_NOMS_SVG, nom);
+  for (const [attribut, valeur] of Object.entries(attributs)) {
+    élément.setAttribute(attribut, String(valeur));
+  }
+  parent.append(élément);
+  return élément;
+}
+
+function ajouterSilhouettePirateSvg(
+  svg: SVGSVGElement,
+  centreX: number,
+  fixture: (typeof FIXTURES_PIRATES)[number],
+): void {
+  const état = fixture.etat;
+  const mort = état === 'mort';
+  const couleurCarte =
+    état === 'attaque'
+      ? '#542019'
+      : état === 'mort'
+        ? '#263944'
+        : état === 'poursuite'
+          ? '#123d3c'
+          : '#132f3b';
+  const couleurBordure =
+    état === 'attaque'
+      ? '#ff765f'
+      : état === 'mort'
+        ? '#91a4ad'
+        : état === 'poursuite'
+          ? '#71d3a5'
+          : '#d7b45c';
+  const carte = ajouterElementSvg(svg, 'g', {
+    transform: 'translate(' + centreX + ' 0)',
+  });
+  carte.setAttribute('data-testid', 'pirate-planche-carte');
+  carte.setAttribute('data-etat', état);
+
+  ajouterElementSvg(carte, 'rect', {
+    x: -106,
+    y: 8,
+    width: 212,
+    height: 219,
+    rx: 16,
+    fill: couleurCarte,
+    'fill-opacity': 0.96,
+    stroke: couleurBordure,
+    'stroke-opacity': 0.9,
+    'stroke-width': 2,
+  });
+  ajouterElementSvg(carte, 'rect', {
+    x: -78,
+    y: 23,
+    width: 156,
+    height: 8,
+    rx: 4,
+    fill: '#260f18',
+    'data-role': 'barre-sante-fond',
+  });
+  if (fixture.ratioSante > 0) {
+    ajouterElementSvg(carte, 'rect', {
+      x: -78,
+      y: 23,
+      width: 156 * fixture.ratioSante,
+      height: 8,
+      rx: 4,
+      fill: état === 'attaque' ? '#ff9a63' : '#72dfa5',
+      'data-role': 'barre-sante',
+    });
+  }
+
+  const indicateur = ajouterElementSvg(carte, 'g', {
+    transform: 'translate(77 50)',
+    'data-role': 'marqueur-etat',
+  });
+  if (état === 'inactif') {
+    ajouterElementSvg(indicateur, 'circle', { cx: 0, cy: 0, r: 7, fill: '#b9c6cb' });
+  } else if (état === 'patrouille') {
+    ajouterElementSvg(indicateur, 'circle', { cx: 0, cy: 0, r: 7, fill: '#d7b45c' });
+    ajouterElementSvg(indicateur, 'circle', { cx: 0, cy: 0, r: 3, fill: couleurCarte });
+  } else if (état === 'poursuite') {
+    ajouterElementSvg(indicateur, 'path', {
+      d: 'M-8 0H5M0-5L6 0 0 5',
+      fill: 'none',
+      stroke: '#71d3a5',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'stroke-width': 3,
+    });
+  } else if (état === 'attaque') {
+    ajouterElementSvg(indicateur, 'path', {
+      d: 'M0-9V9M-9 0H9M-6-6L6 6M6-6L-6 6',
+      fill: 'none',
+      stroke: '#ff765f',
+      'stroke-linecap': 'round',
+      'stroke-width': 2,
+    });
+  } else {
+    ajouterElementSvg(indicateur, 'path', {
+      d: 'M-7-7L7 7M7-7L-7 7',
+      fill: 'none',
+      stroke: '#91a4ad',
+      'stroke-linecap': 'round',
+      'stroke-width': 3,
+    });
+  }
+
+  const silhouette = ajouterElementSvg(carte, 'g', {
+    transform: mort ? 'translate(0 137) rotate(90)' : 'translate(0 137)',
+    'data-role': 'silhouette',
+  });
+  ajouterElementSvg(silhouette, 'ellipse', {
+    cx: 0,
+    cy: 76,
+    rx: 53,
+    ry: 9,
+    fill: '#06151d',
+    'fill-opacity': 0.68,
+  });
+
+  if (!mort) {
+    const jambes = ajouterElementSvg(silhouette, 'g', {});
+    ajouterElementSvg(jambes, 'rect', {
+      x: -19,
+      y: 16,
+      width: 14,
+      height: 57,
+      rx: 4,
+      fill: '#123142',
+      transform: état === 'poursuite' ? 'rotate(-8 -12 18)' : 'rotate(0)',
+    });
+    ajouterElementSvg(jambes, 'rect', {
+      x: 5,
+      y: 16,
+      width: 14,
+      height: 57,
+      rx: 4,
+      fill: '#123142',
+      transform: état === 'poursuite' ? 'rotate(11 12 18)' : 'rotate(0)',
+    });
+    ajouterElementSvg(jambes, 'rect', {
+      x: -22,
+      y: 68,
+      width: 20,
+      height: 8,
+      rx: 4,
+      fill: '#071923',
+    });
+    ajouterElementSvg(jambes, 'rect', {
+      x: 2,
+      y: 68,
+      width: 20,
+      height: 8,
+      rx: 4,
+      fill: '#071923',
+    });
+  } else {
+    ajouterElementSvg(silhouette, 'rect', {
+      x: -42,
+      y: 11,
+      width: 84,
+      height: 17,
+      rx: 8,
+      fill: '#123142',
+    });
+  }
+
+  ajouterElementSvg(silhouette, 'path', {
+    d: 'M-31-31Q0-40 31-31L27 18Q0 27-27 18Z',
+    fill: '#641923',
+  });
+  ajouterElementSvg(silhouette, 'rect', {
+    x: -10,
+    y: -28,
+    width: 20,
+    height: 46,
+    rx: 7,
+    fill: '#8a2935',
+    'fill-opacity': 0.48,
+  });
+
+  if (!mort) {
+    const bras = ajouterElementSvg(silhouette, 'g', {
+      fill: 'none',
+      stroke: '#e5d1a4',
+      'stroke-linecap': 'round',
+      'stroke-width': 12,
+    });
+    const brasGauche =
+      état === 'attaque'
+        ? 'M-29-23L-48-45'
+        : état === 'poursuite'
+          ? 'M-29-23L-52 5'
+          : état === 'patrouille'
+            ? 'M-29-23L-45 9'
+            : 'M-29-23L-43 16';
+    const brasDroit =
+      état === 'attaque'
+        ? 'M29-23L57-48'
+        : état === 'poursuite'
+          ? 'M29-23L48 12'
+          : état === 'patrouille'
+            ? 'M29-23L45 1'
+            : 'M29-23L43 16';
+    ajouterElementSvg(bras, 'path', { d: brasGauche });
+    ajouterElementSvg(bras, 'path', { d: brasDroit });
+  }
+
+  ajouterElementSvg(silhouette, 'rect', {
+    x: -8,
+    y: -43,
+    width: 16,
+    height: 12,
+    rx: 5,
+    fill: '#c87543',
+  });
+  ajouterElementSvg(silhouette, 'circle', { cx: 0, cy: -58, r: 20, fill: '#c87543' });
+  ajouterElementSvg(silhouette, 'path', {
+    d: 'M-12-46Q0-33 12-46L8-36Q0-29-8-36Z',
+    fill: '#291a19',
+  });
+  ajouterElementSvg(silhouette, 'rect', {
+    x: 5,
+    y: -66,
+    width: 17,
+    height: 8,
+    rx: 2,
+    fill: '#0b0a10',
+  });
+  ajouterElementSvg(silhouette, 'rect', {
+    x: -31,
+    y: -65,
+    width: 62,
+    height: 8,
+    rx: 4,
+    fill: '#0b0a10',
+  });
+  ajouterElementSvg(silhouette, 'path', {
+    d: 'M-20-65L-14-81H14L20-65Z',
+    fill: '#0b0a10',
+  });
+
+  const arme = ajouterElementSvg(silhouette, 'g', {
+    'data-role': 'arme',
+    fill: 'none',
+    stroke: '#e1a326',
+    'stroke-linecap': 'round',
+  });
+  if (!mort) {
+    if (état === 'attaque') {
+      ajouterElementSvg(arme, 'path', { d: 'M47-48L77-72', 'stroke-width': 8 });
+      ajouterElementSvg(arme, 'path', {
+        d: 'M43-42L61-54',
+        stroke: '#4a2516',
+        'stroke-width': 8,
+      });
+    } else {
+      ajouterElementSvg(arme, 'path', {
+        d: état === 'poursuite' ? 'M49 10L70-26' : 'M43 14L61-23',
+        'stroke-width': 8,
+      });
+      ajouterElementSvg(arme, 'path', {
+        d: état === 'poursuite' ? 'M49 5L61-2' : 'M42 8L54 2',
+        stroke: '#4a2516',
+        'stroke-width': 8,
+      });
+    }
+  } else {
+    ajouterElementSvg(arme, 'path', {
+      d: 'M30 39L62 55',
+      stroke: '#8f6a29',
+      'stroke-width': 6,
+    });
+  }
+
+  if (état === 'attaque') {
+    ajouterElementSvg(silhouette, 'ellipse', {
+      cx: 0,
+      cy: 29,
+      rx: 43,
+      ry: 30,
+      fill: 'none',
+      stroke: '#ff4c3c',
+      'stroke-opacity': 0.78,
+      'stroke-width': 3,
+    });
+  }
+}
+
+function créerPlanchePiratesE2E(): SVGSVGElement {
+  const svg = document.createElementNS(ESPACE_NOMS_SVG, 'svg');
+  svg.classList.add('pirates-e2e__planche');
+  svg.setAttribute('data-testid', 'pirates-planche');
+  svg.setAttribute('data-role', 'planche-etats-pirates');
+  svg.setAttribute('viewBox', '0 0 1180 235');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  ajouterElementSvg(svg, 'rect', {
+    x: 0,
+    y: 0,
+    width: 1180,
+    height: 235,
+    rx: 20,
+    fill: '#061922',
+    'fill-opacity': 0.78,
+    stroke: '#7b9a9f',
+    'stroke-opacity': 0.38,
+    'stroke-width': 2,
+  });
+  const centres = [118, 354, 590, 826, 1062];
+  FIXTURES_PIRATES.forEach((fixture, index) => {
+    const centre = centres[index];
+    if (centre !== undefined) {
+      ajouterSilhouettePirateSvg(svg, centre, fixture);
+    }
+  });
+  return svg;
+}
+
+function installerEtiquettesPiratesE2E(
+  afficher: boolean,
+  afficherPlanche: boolean,
+): { readonly retirer: () => void } {
   if (!afficher || typeof document === 'undefined') {
     return { retirer: () => undefined };
   }
 
   document.querySelector('.pirates-e2e')?.remove();
+  document.querySelector('.pirates-e2e-legende')?.remove();
   const conteneur = document.createElement('div');
   conteneur.className = 'pirates-e2e';
   conteneur.dataset.testid = 'pirates-e2e';
   conteneur.setAttribute('aria-label', 'États de présentation des pirates');
+  if (afficherPlanche) {
+    conteneur.append(créerPlanchePiratesE2E());
+  }
+
+  const légende = document.createElement('div');
+  légende.className = 'pirates-e2e-legende';
+  légende.setAttribute('aria-label', 'Légende des états de pirates');
 
   for (const [index, fixture] of FIXTURES_PIRATES.entries()) {
     const étiquette = document.createElement('span');
@@ -770,11 +1105,16 @@ function installerEtiquettesPiratesE2E(afficher: boolean): { readonly retirer: (
     étiquette.dataset.etat = fixture.etat;
     étiquette.dataset.index = String(index);
     étiquette.textContent = fixture.label;
-    conteneur.append(étiquette);
+    légende.append(étiquette);
   }
 
-  document.querySelector('#app')?.append(conteneur);
-  return { retirer: () => conteneur.remove() };
+  document.querySelector('#app')?.append(conteneur, légende);
+  return {
+    retirer: () => {
+      conteneur.remove();
+      légende.remove();
+    },
+  };
 }
 
 export function construireGaleriePiratesE2E(
@@ -807,7 +1147,10 @@ export function construireGaleriePiratesE2E(
       etat: fixture.etat,
     }),
   );
-  const étiquettes = installerEtiquettesPiratesE2E(options.afficherEtiquettes === true);
+  const étiquettes = installerEtiquettesPiratesE2E(
+    options.afficherEtiquettes === true,
+    options.afficherPlanche === true,
+  );
   const positionCentrale = acteurs[2]?.obtenirEtat().transformation.position.x ?? 0;
   let temps = 0;
   let libéré = false;

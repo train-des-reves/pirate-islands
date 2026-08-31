@@ -415,6 +415,24 @@ h1 {
   position: absolute;
   z-index: 3;
   right: 34px;
+  bottom: 80px;
+  left: 34px;
+  display: block;
+  height: 225px;
+  pointer-events: none;
+}
+
+.pirates-e2e__planche {
+  display: block;
+  width: 100%;
+  height: 225px;
+  overflow: visible;
+}
+
+.pirates-e2e-legende {
+  position: absolute;
+  z-index: 4;
+  right: 34px;
   bottom: 28px;
   left: 34px;
   display: grid;
@@ -469,6 +487,17 @@ h1 {
   }
 
   .pirates-e2e {
+    right: 16px;
+    bottom: 68px;
+    left: 16px;
+    height: 205px;
+  }
+
+  .pirates-e2e__planche {
+    height: 205px;
+  }
+
+  .pirates-e2e-legende {
     right: 16px;
     bottom: 16px;
     left: 16px;

@@ -74,6 +74,7 @@ const paramètres = new URLSearchParams(window.location.search);
 const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
 const modePirates = modeE2E && paramètres.get('vue') === 'pirates';
 const animationPirates = modePirates && paramètres.get('animation') === '1';
+const structurePirates = modePirates && paramètres.get('structure') === '1';
 const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
 const modeMonde = paramètres.has('graine') || paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
@@ -83,6 +84,7 @@ conteneurApplication.dataset.mode = modePirates ? 'pirates' : modeMonde ? 'monde
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
 conteneurApplication.dataset.vue = modePirates ? 'pirates' : 'standard';
+conteneurApplication.dataset.structure = structurePirates ? 'oui' : 'non';
 conteneurApplication.dataset.iles = String(monde.iles.length);
 conteneurApplication.dataset.diagnostics =
   modePirates || (modeMonde && modeE2E) ? 'actifs' : 'inactifs';
@@ -148,6 +150,7 @@ function construireScene(): JeuClient | undefined {
 
       const galerie = construireGaleriePiratesE2E(scene, {
         afficherEtiquettes: true,
+        afficherPlanche: structurePirates,
         animerInterpolation: animationPirates,
       });
       let dernierTemps = performance.now();

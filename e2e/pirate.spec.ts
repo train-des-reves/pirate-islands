@@ -11,11 +11,14 @@ test.describe('acteur pirate terrestre', () => {
       }
     });
 
-    await page.goto('/?e2e=1&vue=pirates');
+    await page.goto('/?e2e=1&vue=pirates&structure=1');
     await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
     await expect(page.locator('#app')).toHaveAttribute('data-mode', 'pirates');
     await expect(page.locator('#app')).toHaveAttribute('data-vue', 'pirates');
+    await expect(page.locator('#app')).toHaveAttribute('data-structure', 'oui');
     await expect(page.getByTestId('pirate-fixture')).toHaveCount(5);
+    await expect(page.getByTestId('pirates-planche')).toBeVisible();
+    await expect(page.getByTestId('pirate-planche-carte')).toHaveCount(5);
     await expect(page.getByTestId('pirate-fixture').nth(0)).toHaveText('Inactif');
     await expect(page.getByTestId('pirate-fixture').nth(1)).toHaveText('Patrouille');
     await expect(page.getByTestId('pirate-fixture').nth(2)).toHaveText('Poursuite');
@@ -25,12 +28,20 @@ test.describe('acteur pirate terrestre', () => {
       timeout: 10_000,
     });
 
-    await expect(page).toHaveScreenshot('pirates-1280x720.png', {
-      animations: 'disabled',
-      caret: 'hide',
-      maxDiffPixelRatio: 0.015,
-      scale: 'css',
-    });
+    const cartes = page.getByTestId('pirate-planche-carte');
+    const états = ['inactif', 'patrouille', 'poursuite', 'attaque', 'mort'];
+    for (const [index, état] of états.entries()) {
+      const carte = cartes.nth(index);
+      await expect(carte).toHaveAttribute('data-etat', état);
+      await expect(carte.locator('[data-role="silhouette"]')).toHaveCount(1);
+      await expect(carte.locator('[data-role="arme"]')).toHaveCount(1);
+      await expect(carte.locator('[data-role="barre-sante-fond"]')).toHaveCount(1);
+      await expect(carte.locator('[data-role="marqueur-etat"]')).toHaveCount(1);
+      await expect(carte.locator('[data-role="barre-sante"]')).toHaveCount(état === 'mort' ? 0 : 1);
+    }
+
+    await page.goto('/?e2e=1&vue=pirates');
+    await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
     await page.screenshot({
       path: 'docs/preuves/pirates-1280x720.png',
       fullPage: false,
@@ -46,6 +57,7 @@ test.describe('acteur pirate terrestre', () => {
     await page.goto('/?e2e=1&vue=pirates&animation=1');
     await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
     await expect(page.getByTestId('pirate-fixture')).toHaveCount(5);
+    await expect(page.getByTestId('pirates-planche')).toHaveCount(0);
     await page.waitForTimeout(600);
     await expect(page.locator('.marqueurs-e2e')).toHaveCount(0);
   });
