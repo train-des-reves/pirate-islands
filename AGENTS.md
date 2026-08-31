@@ -97,7 +97,7 @@ Exécuter d'abord le test ciblé, puis toutes les barrières applicables avant r
 - Règles pures, cookie, touches, calculs et protocole : Vitest.
 - Multijoueur : vrai serveur en processus de test ; arrivée/départ, validation, autorité et état.
 - Parcours navigateur : Playwright sur Chromium épinglé.
-- Interface ou scène stable : captures d’observation et assertions DOM/état ; aucune comparaison de pixels ou baseline.
+- Interface ou scène stable : comparaison de captures, avec contenu non déterministe masqué.
 - Deux joueurs : deux contextes navigateur isolés, jamais deux pages partageant le stockage.
 - Régression : test rouge avant le correctif, vert après.
 

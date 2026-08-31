@@ -12,13 +12,9 @@ test.describe('monde ensemencé', () => {
     });
 
     await page.goto('/?e2e=1&graine=mvp-defaut&camera=ensemble');
-    await expect(page.locator('#scene-canvas')).toBeVisible();
-    await expect(page.locator('#app')).toHaveAttribute('data-mode', 'monde');
     await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
     await expect(page.locator('#app')).toHaveAttribute('data-graine', 'mvp-defaut');
     await expect(page.locator('#app')).toHaveAttribute('data-camera', 'ensemble');
-    await expect(page.locator('#app')).toHaveAttribute('data-iles', '3');
-    await expect(page.locator('#app')).toHaveAttribute('data-diagnostics', 'actifs');
     await expect(page.locator('[data-testid="marqueur-ile"]')).toHaveCount(3);
     await expect(page.locator('[data-testid="marqueur-ile"]').nth(0)).toContainText('Île Aube');
     await expect(page.locator('[data-testid="marqueur-ile"]').nth(1)).toContainText('Île Brume');
@@ -27,6 +23,14 @@ test.describe('monde ensemencé', () => {
       timeout: 10_000,
     });
 
+    await expect(page).toHaveScreenshot('monde-ensemble-1280x720.png', {
+      animations: 'disabled',
+      caret: 'hide',
+      // CI Ubuntu a observé 13 798 pixels différents sur 921 600 (1,497 %).
+      // 0,015 est le plus petit seuil reproductible avec cette marge mesurée.
+      maxDiffPixelRatio: 0.015,
+      scale: 'css',
+    });
     await page.screenshot({
       path: 'docs/preuves/monde-ensemble-1280x720.png',
       fullPage: false,

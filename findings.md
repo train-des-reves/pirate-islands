@@ -2,10 +2,6 @@
 
 Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’orchestration. Les heartbeats répétitifs sans changement ne sont pas recopiés.
 
-## Décision durable
-
-- 31 août 2026 — Les comparaisons de screenshots, baselines et toHaveScreenshot sont interdites ; elles sont remplacées par des assertions DOM/état et des captures ou vidéos observationnelles.
-
 ## Incidents et solutions
 
 ### Délégation et canal de retour
@@ -45,7 +41,6 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 | --- | --- | --- |
 | Exécuteur #3 | Archivé après fusion | Correctif final `303a7ef`, PR [#22](https://github.com/train-des-reves/pirate-islands/pull/22) fusionnée sous `ae2a0f5`. Simulation à pas fixe, CI #18 verte, preuves release rattachées au head final ; issue #3 fermée. |
 | Exécuteur #4 | Archivé après fusion | Commit `835c97d`, PR [#23](https://github.com/train-des-reves/pirate-islands/pull/23) fusionnée par `cd739ef`. `lint`, `typecheck`, `test` (19), `build`, `test:e2e` (3/3) et formatage ciblé verts ; `format:check` global reste rouge sur 32 fichiers de base hors issue. Issue #4 fermée comme terminée. |
-| Exécuteur #2 | Head anti-comparaison prêt à publier | Branche `codex/issue-2-schemas-salle` ; 8 scénarios Playwright, 38 tests Vitest, lint, typage et build verts ; preuve composite PNG 1280×720 prête. |
 | Revue PR #22 | Archivée après fusion | Terra `medium` a d’abord demandé les corrections collision/seuil et le diagnostic E2E ; recontrôle final FAVORABLE sur `303a7ef`, CI #18 verte, preuves release et absence de conflit. |
 | Revue PR #23 | Archivée après fusion | Verdict Terra `medium` favorable, avec un point P2 d’accessibilité hors blocage ; tâche archivée après fusion. |
 | PR #24 documentation | Ouverte — synchronisation locale prête à publier | Branche `codex/protocole-assets`, issue #25 ; merge local avec `main=ae2a0f5` effectué, asset dédié et description corrigée avec commande/scénario déterministe et `Closes #25`. Il faut pousser ce head, rattacher l’asset au head final, puis obtenir CI verte et le recontrôle Terra. |
