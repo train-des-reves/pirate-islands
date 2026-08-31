@@ -13,6 +13,7 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 - Nouvelle règle de modèle : aucun `github-copilot/*` n’est autorisé. Les verdicts Carver/Huygens issus de cette route ne sont pas recevables pour un `Go final`; #2 et #9 doivent relancer eux-mêmes un reviewer direct `gpt-5.6-terra`, tandis que la revue directe existante de #8 peut être réutilisée.
 - Nouvelle règle de modèle : tout développement d’exécuteur utilise désormais `deepseek/deepseek-v4-flash-vision-exp` avec l’effort `high`; les revues utilisent exclusivement `gpt-5.6-terra` avec l’effort `medium`.
 - Nouvelle règle de canal : les exécutants ne communiquent plus directement avec le surveillant ; ils consignent une ligne `thème — état` dans leur tâche, lue par la heartbeat de cinq minutes. Les seules exceptions sont les checklists formelles d’`Entrée en revue` et de `Go final`, également consignées dans la tâche.
+- Nouvelle règle de revue : chaque lead délègue la revue à un sous-agent `gpt-5.6-terra` / `medium` et réutilise ce même sous-agent pour les nouveaux heads ; le lead ne réalise pas lui-même la revue.
 - Transition appliquée : les tâches reviewers Carver (`01a05807-3168-7271-b1ff-5e8676d982f9`) et Huygens (`01a05807-326a-7553-a1d9-82010eb525c5`) ont été fermées ; leurs verdicts ne peuvent plus valider #28 ou #29. Les exécutants concernés doivent relancer un reviewer direct Terra après les préconditions.
 
 ### Isolation Git et worktrees
