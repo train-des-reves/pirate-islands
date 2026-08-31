@@ -1,4 +1,5 @@
 import type { Point3D } from './index.js';
+import type { ZonePeche } from './peche.js';
 
 export const GRAINE_MVP_PAR_DEFAUT = 'mvp-defaut';
 export const NOMBRE_ILES_MVP = 3;
@@ -99,6 +100,7 @@ export interface DescripteurMonde {
   readonly ocean: DescripteurOcean;
   readonly iles: readonly DescripteurIle[];
   readonly marqueurs: readonly MarqueurIle[];
+  readonly zonesPeche: readonly ZonePeche[];
 }
 
 interface AncrageIle {
@@ -456,14 +458,59 @@ export function genererMonde(graine: string = GRAINE_MVP_PAR_DEFAUT): Descripteu
   const graineNormalisee = graine.trim() || GRAINE_MVP_PAR_DEFAUT;
   const aleatoire = créerAleatoire(graineNormalisee);
   const iles = ANCRAGES_ILES.map((ancrage) => créerIle(ancrage, aleatoire));
+  const zonesPeche = créerZonesPeche(iles);
   const monde: DescripteurMonde = {
     graine: graineNormalisee,
     ocean: OCEAN_MVP,
     iles,
     marqueurs: iles.map((ile) => ile.marqueur),
+    zonesPeche,
   };
 
   return figerProfondément(monde);
+}
+
+function créerZonesPeche(iles: readonly DescripteurIle[]): readonly ZonePeche[] {
+  return iles.flatMap((ile) => {
+    const zoneRivage = créerZoneRivage(ile);
+    const zoneQuai = créerZoneQuai(ile);
+    return [zoneRivage, zoneQuai];
+  });
+}
+
+function créerZoneRivage(ile: DescripteurIle): ZonePeche {
+  const direction = ile.approche.direction;
+  const centre = {
+    x: ile.transformation.position.x + direction.x * (ile.rayonX * 1.12),
+    y: ile.transformation.position.y,
+    z: ile.transformation.position.z + direction.z * (ile.rayonZ * 1.12),
+  };
+  return {
+    id: `zone-rivage-${ile.id}`,
+    ileId: ile.id,
+    type: 'rivage',
+    centre,
+    rayon: 3.2,
+    nom: `${ile.nom} — rivage`,
+  };
+}
+
+function créerZoneQuai(ile: DescripteurIle): ZonePeche {
+  const quai = ile.approche.quai;
+  const direction = ile.approche.direction;
+  const centre = {
+    x: quai.position.x + direction.x * (quai.longueur * 0.35),
+    y: ile.transformation.position.y,
+    z: quai.position.z + direction.z * (quai.longueur * 0.35),
+  };
+  return {
+    id: `zone-quai-${ile.id}`,
+    ileId: ile.id,
+    type: 'quai',
+    centre,
+    rayon: 2.4,
+    nom: `${ile.nom} — quai`,
+  };
 }
 
 export const créerMonde = genererMonde;

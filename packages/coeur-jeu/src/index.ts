@@ -23,3 +23,4 @@ export function creerPoint3D(x: number, y: number, z: number): Point3D {
 }
 
 export * from './monde.js';
+export * from './peche.js';

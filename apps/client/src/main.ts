@@ -33,6 +33,8 @@ import {
   type DiagnosticSalleConnecte,
   type ElementsDiagnosticSalle,
 } from './jeu/diagnostic-salle';
+import { construireHarnaisPeche } from './interface/harnais-peche.js';
+import { monterPresentationPeche } from './interface/presenter-peche.js';
 
 import './style.css';
 
@@ -123,7 +125,7 @@ declare global {
 }
 
 interface JeuClient {
-  readonly moteur: Engine;
+  readonly moteur?: Engine;
   detruire: () => void;
 }
 
@@ -137,13 +139,17 @@ const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
+const modePresentationPeche = modeE2E && paramètres.get('presentation') === 'regles-peche';
 const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
-const modeMonde = modeDiagnosticSalle || paramètres.has('graine') || paramètres.has('camera');
+const modeMonde =
+  modeDiagnosticSalle || modePresentationPeche || paramètres.has('graine') || paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
 conteneurApplication.dataset.mode = modePirates
   ? 'pirates'
+  : modePresentationPeche
+    ? 'presentation'
   : modeDiagnosticSalle
     ? 'diagnostic-salle'
     : modeMonde
@@ -180,6 +186,18 @@ canvasJeu.height = HAUTEUR_REFERENCE;
 
 function construireScene(): JeuClient | undefined {
   try {
+    if (modePresentationPeche) {
+      const harnais = construireHarnaisPeche(graine, 1);
+      const presentation = monterPresentationPeche(harnais, conteneurApplication);
+      conteneurApplication.dataset.scene = 'ready';
+      conteneurApplication.dataset.presentation = 'regles-peche';
+      return {
+        detruire: () => {
+          presentation.detruire();
+        },
+      };
+    }
+
     const moteur = new Engine(canvasJeu, true, {
       preserveDrawingBuffer: true,
       stencil: true,

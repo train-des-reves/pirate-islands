@@ -535,6 +535,64 @@ h1 {
   color: #ffd0a9;
 }
 
+.presentation-peche {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: min(calc(100% - 64px), 760px);
+  padding: 30px 34px;
+  border: 1px solid rgba(221, 249, 255, 0.38);
+  border-radius: 20px;
+  background: rgba(5, 34, 51, 0.92);
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.32);
+  transform: translate(-50%, -50%);
+}
+
+.presentation-peche h2 {
+  margin: 0;
+  font-size: 1.9rem;
+  letter-spacing: -0.04em;
+}
+
+.presentation-peche-graine {
+  margin: 8px 0 22px;
+  color: rgba(229, 249, 255, 0.72);
+  font-size: 0.86rem;
+  letter-spacing: 0.04em;
+}
+
+.presentation-peche-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.presentation-peche-table th,
+.presentation-peche-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(221, 249, 255, 0.16);
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.presentation-peche-table thead th {
+  color: rgba(223, 250, 255, 0.68);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.presentation-peche-table tbody th {
+  color: #fff8d5;
+  font-weight: 700;
+}
+
+.presentation-peche-table tbody td {
+  color: rgba(232, 250, 255, 0.88);
+}
+
 @media (max-width: 640px) {
   .interface {
     width: calc(100% - 48px);
