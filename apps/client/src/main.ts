@@ -27,6 +27,12 @@ import {
   type IntentionTir,
 } from './jeu/tir';
 import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
+import {
+  afficherErreurDiagnosticSalle,
+  connecterDiagnosticSalle,
+  type DiagnosticSalleConnecte,
+  type ElementsDiagnosticSalle,
+} from './jeu/diagnostic-salle';
 
 import './style.css';
 
@@ -41,6 +47,19 @@ const indicateurServeur = document.querySelector<HTMLElement>('[data-testid="ser
 const calquePause = document.querySelector<HTMLElement>('[data-testid="pause-overlay"]');
 const diagnostic = document.querySelector<HTMLElement>('[data-testid="diagnostic-jeu"]');
 const etatPointeur = document.querySelector<HTMLElement>('[data-testid="etat-pointeur"]');
+const diagnosticSalle = document.querySelector<HTMLElement>('[data-testid="diagnostic-salle"]');
+const diagnosticSalleId = document.querySelector<HTMLElement>(
+  '[data-testid="diagnostic-salle-id"]',
+);
+const diagnosticSessionId = document.querySelector<HTMLElement>(
+  '[data-testid="diagnostic-session-id"]',
+);
+const diagnosticNombreJoueurs = document.querySelector<HTMLElement>(
+  '[data-testid="diagnostic-nombre-joueurs"]',
+);
+const diagnosticSalleErreur = document.querySelector<HTMLElement>(
+  '[data-testid="diagnostic-salle-erreur"]',
+);
 const diagnosticTir = document.querySelector<HTMLElement>('[data-testid="tir-diagnostic"]');
 
 if (
@@ -50,6 +69,11 @@ if (
   !calquePause ||
   !diagnostic ||
   !etatPointeur ||
+  !diagnosticSalle ||
+  !diagnosticSalleId ||
+  !diagnosticSessionId ||
+  !diagnosticNombreJoueurs ||
+  !diagnosticSalleErreur ||
   !diagnosticTir
 ) {
   throw new Error('La structure de la page Pirate Islands est incomplète.');
@@ -61,6 +85,14 @@ const statutServeur = indicateurServeur;
 const overlayPause = calquePause;
 const diagnosticJeu = diagnostic;
 const indicateurPointeur = etatPointeur;
+const diagnosticSalleJeu = diagnosticSalle;
+const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
+  conteneur: diagnosticSalleJeu,
+  identifiantSalle: diagnosticSalleId,
+  sessionId: diagnosticSessionId,
+  nombreJoueurs: diagnosticNombreJoueurs,
+  erreur: diagnosticSalleErreur,
+};
 const indicateurTir = diagnosticTir;
 
 interface EtatJeuE2E {
@@ -96,19 +128,27 @@ interface JeuClient {
 }
 
 const paramètres = new URLSearchParams(window.location.search);
-const modeE2E = import.meta.env.DEV && paramètres.get('e2e') === '1';
+const modeE2E =
+  import.meta.env.DEV && import.meta.env.VITE_E2E === '1' && paramètres.get('e2e') === '1';
 const modePirates = modeE2E && paramètres.get('vue') === 'pirates';
 const animationPirates = modePirates && paramètres.get('animation') === '1';
 const structurePirates = modePirates && paramètres.get('structure') === '1';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
+const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const modeCamera: ModeCameraMonde = paramètres.get('camera') === 'rivage' ? 'rivage' : 'ensemble';
-const modeMonde = paramètres.has('graine') || paramètres.has('camera');
+const modeMonde = modeDiagnosticSalle || paramètres.has('graine') || paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
-conteneurApplication.dataset.mode = modePirates ? 'pirates' : modeMonde ? 'monde' : 'bac';
+conteneurApplication.dataset.mode = modePirates
+  ? 'pirates'
+  : modeDiagnosticSalle
+    ? 'diagnostic-salle'
+    : modeMonde
+      ? 'monde'
+      : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
 conteneurApplication.dataset.vue = modePirates ? 'pirates' : 'standard';
@@ -496,6 +536,31 @@ function construireScene(): JeuClient | undefined {
 }
 
 const jeu = construireScene();
+
+let diagnosticSalleConnecte: DiagnosticSalleConnecte | undefined;
+
+if (modeDiagnosticSalle) {
+  conteneurApplication.dataset.diagnostics = 'actifs';
+  const urlServeur = import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567';
+  const graineDiagnostic = paramètres.get('graine')?.trim();
+  const optionsDiagnostic = graineDiagnostic ? { graine: graineDiagnostic } : {};
+  const identifiantSalle = paramètres.get('room')?.trim() || undefined;
+
+  void connecterDiagnosticSalle(
+    urlServeur,
+    optionsDiagnostic,
+    elementsDiagnosticSalle,
+    identifiantSalle,
+  )
+    .then((connexion) => {
+      diagnosticSalleConnecte = connexion;
+    })
+    .catch((erreur: unknown) => {
+      afficherErreurDiagnosticSalle(erreur, elementsDiagnosticSalle);
+    });
+}
+
+window.addEventListener('pagehide', () => diagnosticSalleConnecte?.detruire(), { once: true });
 
 async function vérifierServeur(): Promise<void> {
   const urlServeur = import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567';
