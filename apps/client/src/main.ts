@@ -59,6 +59,10 @@ import {
   type EtatConnexion,
   validerNomSaisi,
 } from './jeu/connexion-salle';
+import {
+  construireVisualiseurIa,
+  type EtatVisualiseurIa,
+} from './jeu/visualiseur-ia';
 
 import './style.css';
 
@@ -388,6 +392,8 @@ declare global {
       reinitialiser: () => void;
       tirer: (nombre?: number) => void;
       avancerTemps: (deltaMs: number) => void;
+      lireEtatViseurIa?: () => EtatVisualiseurIa;
+      afficherInstantViseurIa?: (instant: number) => void;
     };
   }
 }
@@ -403,6 +409,7 @@ const modeE2E =
 const modePirates = modeE2E && paramètres.get('vue') === 'pirates';
 const animationPirates = modePirates && paramètres.get('animation') === '1';
 const structurePirates = modePirates && paramètres.get('structure') === '1';
+const modeViseurIa = modeE2E && paramètres.get('vue') === 'ia';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
@@ -413,25 +420,32 @@ const modeMonde = modeDiagnosticSalle || paramètres.has('graine') || paramètre
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
 
-conteneurApplication.dataset.mode = modePirates
-  ? 'pirates'
-  : modeDiagnosticSalle
-    ? 'diagnostic-salle'
-    : modeMonde
-      ? 'monde'
-      : 'bac';
+conteneurApplication.dataset.mode = modeViseurIa
+  ? 'ia'
+  : modePirates
+    ? 'pirates'
+    : modeDiagnosticSalle
+      ? 'diagnostic-salle'
+      : modeMonde
+        ? 'monde'
+        : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
-conteneurApplication.dataset.vue = modePirates ? 'pirates' : 'standard';
+conteneurApplication.dataset.vue = modeViseurIa ? 'ia' : modePirates ? 'pirates' : 'standard';
 conteneurApplication.dataset.structure = structurePirates ? 'oui' : 'non';
 conteneurApplication.dataset.iles = String(monde.iles.length);
 conteneurApplication.dataset.diagnostics =
-  modePirates || (modeMonde && modeE2E) ? 'actifs' : 'inactifs';
+  modeViseurIa || modePirates || (modeMonde && modeE2E) ? 'actifs' : 'inactifs';
 conteneurApplication.dataset.pause = 'non';
 conteneurApplication.dataset.pointeur = 'libere';
 conteneurApplication.dataset.collision = 'aucune';
 
-if (modePirates) {
+if (modeViseurIa) {
+  document
+    .querySelector<HTMLElement>('.eyebrow')
+    ?.replaceChildren('Harnais visuel E2E · MVP-2G');
+  document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('IA pirate');
+} else if (modePirates) {
   document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Galerie de rendu · MVP-2F');
   document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('Pirates terrestres');
   document
@@ -450,6 +464,38 @@ canvasJeu.width = LARGEUR_REFERENCE;
 canvasJeu.height = HAUTEUR_REFERENCE;
 
 function construireScene(): JeuClient | undefined {
+  if (modeViseurIa) {
+    const visualiseur = construireVisualiseurIa(conteneurApplication, canvasJeu);
+    window.__pirateIslandsE2E = {
+      verrouillerPointeur: () => undefined,
+      libererPointeur: () => undefined,
+      lireEtat: () => ({
+        position: { x: 0, y: 0, z: 0 },
+        camera: { lacet: 0, tangage: 0 },
+        pause: false,
+        pointeurVerrouille: false,
+        collision: 'aucune',
+        reglages: reglages.applique,
+        tir: { compteur: 0, etat: { recul: 0, eclairBouche: false }, derniereIntention: undefined, intentions: [] },
+      }),
+      lireReglages: () => reglages.applique,
+      reinitialiser: () => undefined,
+      tirer: () => undefined,
+      avancerTemps: () => undefined,
+      lireEtatViseurIa: () => visualiseur.lireEtat(),
+      afficherInstantViseurIa: (instant) => visualiseur.afficherInstant(instant),
+    };
+    conteneurApplication.dataset.scene = 'ready';
+    conteneurApplication.dataset.vue = 'ia';
+    return {
+      moteur: undefined as unknown as Engine,
+      detruire: () => {
+        visualiseur.detruire();
+        delete window.__pirateIslandsE2E;
+      },
+    };
+  }
+
   try {
     const moteur = new Engine(canvasJeu, true, {
       preserveDrawingBuffer: true,
