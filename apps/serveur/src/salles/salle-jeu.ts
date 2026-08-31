@@ -90,7 +90,7 @@ export class SalleJeu extends Room<{
     const indexApparition = this.prochainIndexApparition++;
     client.userData = { indexApparition };
 
-    const joueur = creerJoueur(client.sessionId, indexApparition);
+    const joueur = creerJoueur(client.sessionId, indexApparition, validation.valeur.nom);
     const bateau = creerBateau(client.sessionId, indexApparition);
 
     this.state.joueurs.set(client.sessionId, joueur);

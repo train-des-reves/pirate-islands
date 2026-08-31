@@ -2,10 +2,12 @@ import type { MessagePing } from './messages.js';
 
 export const TAILLE_MAX_GRAINE = 64;
 export const TAILLE_MAX_IDENTIFIANT = 128;
+export const TAILLE_MAX_NOM = 32;
 export const LIMITE_HORODATAGE = 4_102_444_800_000;
 
 export interface OptionsConnexion {
   readonly graine?: string;
+  readonly nom?: string;
 }
 
 export type ResultatValidation<T> =
@@ -48,7 +50,7 @@ export function validerOptionsConnexion(valeur: unknown): ResultatValidation<Opt
     return resultatErreur('Les options de connexion doivent être un objet.');
   }
 
-  if (!possedeUniquement(valeur, ['graine'])) {
+  if (!possedeUniquement(valeur, ['graine', 'nom'])) {
     return resultatErreur('Les options de connexion contiennent un champ inconnu.');
   }
 
@@ -56,9 +58,16 @@ export function validerOptionsConnexion(valeur: unknown): ResultatValidation<Opt
     return resultatErreur('La graine de connexion est invalide ou trop longue.');
   }
 
+  if (valeur.nom !== undefined && !estChaineBorne(valeur.nom, TAILLE_MAX_NOM)) {
+    return resultatErreur('Le nom de connexion est invalide ou trop long.');
+  }
+
   return {
     valide: true,
-    valeur: valeur.graine === undefined ? {} : { graine: valeur.graine },
+    valeur: {
+      ...(valeur.graine === undefined ? {} : { graine: valeur.graine }),
+      ...(valeur.nom === undefined ? {} : { nom: valeur.nom }),
+    },
   };
 }
 
