@@ -34,6 +34,7 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 - Le reviewer Terra a demandé une commande/scénario déterministe et un asset provenant de la branche #24 ; la branche a été resynchronisée avec `origin/main` dans `b87b670` avant cette nouvelle preuve.
 - Après la synchronisation, la CI #22 a reproduit sur Ubuntu un déplacement trop lent : le delta de rendu plafonné à 0,05 s ne simulait pas assez de temps réel et l’E2E restait sur `sol` au lieu d’atteindre `mur`. Solution : simulation à pas fixe de 50 ms avec accumulateur borné à 250 ms (`303a7ef`), régression sur frames lentes, puis CI #18 entièrement verte.
 - Les captures #22 ont été remplacées depuis le head final `303a7ef` dans `mvp-1b-pr22-preuve` (deux PNG `image/png`, URLs `browser_download_url` absolues). La PR #22 a été fusionnée sous `ae2a0f5` ; `main` a été avancé en fast-forward.
+- La preuve documentaire a ensuite été republiée dans `mvp-docs-pr24-preuve-626910f` depuis le head `626910f`; CI #20 et le recontrôle Terra sont favorables. La PR #24 a été fusionnée sous `d096f50`, puis l’issue #25 a été fermée.
 
 ## État des exécuteurs et des PR
 
@@ -43,6 +44,6 @@ Ce fichier regroupe uniquement les incidents distincts rencontrés pendant l’o
 | Exécuteur #4 | Archivé après fusion | Commit `835c97d`, PR [#23](https://github.com/train-des-reves/pirate-islands/pull/23) fusionnée par `cd739ef`. `lint`, `typecheck`, `test` (19), `build`, `test:e2e` (3/3) et formatage ciblé verts ; `format:check` global reste rouge sur 32 fichiers de base hors issue. Issue #4 fermée comme terminée. |
 | Revue PR #22 | Archivée après fusion | Terra `medium` a d’abord demandé les corrections collision/seuil et le diagnostic E2E ; recontrôle final FAVORABLE sur `303a7ef`, CI #18 verte, preuves release et absence de conflit. |
 | Revue PR #23 | Archivée après fusion | Verdict Terra `medium` favorable, avec un point P2 d’accessibilité hors blocage ; tâche archivée après fusion. |
-| PR #24 documentation | Ouverte — synchronisation locale prête à publier | Branche `codex/protocole-assets`, issue #25 ; merge local avec `main=ae2a0f5` effectué, asset dédié et description corrigée avec commande/scénario déterministe et `Closes #25`. Il faut pousser ce head, rattacher l’asset au head final, puis obtenir CI verte et le recontrôle Terra. |
+| PR #24 documentation | Fusionnée — suivi terminé | Head `626910f`, release `mvp-docs-pr24-preuve-626910f`, CI #20 verte et verdict Terra FAVORABLE ; fusion `d096f50`, issue #25 fermée, reviewer archivé. |
 
-Dernier état connu : #22 est fusionnée sous `ae2a0f5`, l’issue #3 est fermée et l’exécuteur/reviewer sont archivés ; #23 est fusionnée et #4 fermée. La PR #24 a son asset dédié et son lien `Closes #25`, mais doit être poussée après synchronisation avec `main`, puis revalidée par CI et Terra. Les anciennes tentatives d’exécuteurs et le worktree `2acb` restent conservés pour ne pas écraser de travail utilisateur.
+Dernier état connu : #22 est fusionnée sous `ae2a0f5`, l’issue #3 est fermée et l’exécuteur/reviewer sont archivés ; #23 est fusionnée et #4 fermée ; #24 est fusionnée sous `d096f50`, #25 fermée et son reviewer archivé. Il n’y a actuellement aucune issue prête sans branche/PR active ; les anciennes tentatives et le worktree `2acb` restent conservés pour ne pas écraser de travail utilisateur.
