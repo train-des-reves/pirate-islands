@@ -843,11 +843,8 @@ const jeu = construireScene();
 let diagnosticSalleConnecte: DiagnosticSalleConnecte | undefined;
 
 let connecteurPanneau: ConnecteurConnexion | undefined;
-let etatPanneau: EtatConnexion = 'attente';
-let derniereConnexion: EtatAffichageConnexion | undefined;
 
 function actualiserStatutPanneau(etat: EtatConnexion, message?: string): void {
-  etatPanneau = etat;
   statutConnexionElement.dataset.etat = etat;
   messageConnexionElement.textContent =
     message ??
@@ -861,15 +858,21 @@ function actualiserStatutPanneau(etat: EtatConnexion, message?: string): void {
             ? 'La salle est complète.'
             : etat === 'deconnecte'
               ? 'Vous avez quitté la salle.'
-              : etat === 'reconnexion'
-                ? 'Connexion instable, reconnexion…'
-                : 'Connexion impossible.');
+            : etat === 'reconnexion'
+              ? 'Connexion instable, reconnexion…'
+              : 'Connexion impossible.');
 
-  const montrerActions = etat === 'echec' || etat === 'salle-pleine' || etat === 'deconnecte';
-  actionsConnexionElement.hidden = !montrerActions;
-  boutonReessayerElement.hidden = !montrerActions;
-  boutonRetourElement.hidden = !montrerActions;
-  infosConnexionElement.hidden = etat !== 'connecte';
+  const montreSalle = etat === 'connecte' || etat === 'reconnexion';
+  const pouvoirReessayer =
+    etat === 'echec' || etat === 'salle-pleine' || etat === 'deconnecte';
+  const montrerRetour = montreSalle || pouvoirReessayer;
+  const montrerFormulaire =
+    etat === 'attente' || etat === 'echec' || etat === 'salle-pleine' || etat === 'deconnecte';
+  formulaireConnexionElement.hidden = !montrerFormulaire;
+  actionsConnexionElement.hidden = !montrerRetour;
+  boutonReessayerElement.hidden = !pouvoirReessayer;
+  boutonRetourElement.hidden = !montrerRetour;
+  infosConnexionElement.hidden = !montreSalle;
 }
 
 function actualiserInfosConnexion(donnees: EtatAffichageConnexion): void {
@@ -882,6 +885,14 @@ function actualiserInfosConnexion(donnees: EtatAffichageConnexion): void {
 function afficherPanneauAccueil(): void {
   panneauAccueilElement.hidden = false;
   conteneurApplication.dataset.mode = 'accueil';
+}
+
+function urlServeurPartirDe(base: string): string {
+  if (!modeE2E) {
+    return base;
+  }
+  const surdefinie = paramètres.get('serveur');
+  return surdefinie?.trim() || base;
 }
 
 async function rejoindreSalle(): Promise<void> {
@@ -901,7 +912,9 @@ async function rejoindreSalle(): Promise<void> {
 
   actualiserStatutPanneau('connexion');
   boutonRejoindreElement.disabled = true;
-  const urlServeur = import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567';
+  const urlServeur = urlServeurPartirDe(
+    import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567',
+  );
   const optionsConnexion: OptionsConnexion = {
     ...(nom ? { nom } : {}),
   };
@@ -911,7 +924,6 @@ async function rejoindreSalle(): Promise<void> {
     optionsConnexion,
     {
       surEtat: (donnees) => {
-        derniereConnexion = donnees;
         actualiserStatutPanneau(donnees.etat, donnees.message);
         if (donnees.etat === 'connecte') {
           actualiserInfosConnexion(donnees);
@@ -921,9 +933,6 @@ async function rejoindreSalle(): Promise<void> {
     identifiantSalle,
   );
   boutonRejoindreElement.disabled = false;
-  if (connecteurPanneau.salleId) {
-    panneauAccueilElement.hidden = true;
-  }
 }
 
 formulaireConnexionElement.addEventListener('submit', (evenement) => {

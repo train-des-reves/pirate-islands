@@ -96,7 +96,15 @@ export function classifierErreurConnexion(erreur: unknown): ClassificationConnex
   const code = lireCodeErreur(erreur);
   const message = erreur instanceof Error ? erreur.message : '';
 
-  if (message.includes('already full') || message.includes('est déjà complète') || message.includes('is full')) {
+  if (
+    message.includes('already full') ||
+    message.includes('is full') ||
+    message.includes('is locked') ||
+    message.includes('est déjà complète') ||
+    message.includes('est complète') ||
+    message.includes('complète') ||
+    message.includes('verrouillée')
+  ) {
     return { etat: 'salle-pleine', message: MESSAGE_SALLE_PLEINE };
   }
 

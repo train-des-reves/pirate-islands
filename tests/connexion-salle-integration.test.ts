@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { Client, type Room } from '@colyseus/sdk';
+import { Client } from '@colyseus/sdk';
 
 import { EtatSalleSchema } from '@pirate/protocole';
 
@@ -119,7 +119,7 @@ describe('connecteur de salle Colyseus', () => {
       collecteurHôte.abonnement,
     );
 
-    const connexions: Array<ReturnType<typeof connecterSalleJeu>> = [hôte];
+    const connexions: Array<Awaited<ReturnType<typeof connecterSalleJeu>>> = [hôte];
     for (let index = 1; index < 8; index += 1) {
       const collecteur = créerCollecteur();
       const connexion = await connecterSalleJeu(
