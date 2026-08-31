@@ -61,3 +61,21 @@ pnpm exec playwright test e2e/reglages.spec.ts --config=playwright.config.ts
 URL : http://127.0.0.1:4173/?e2e=1
 
 La vidéo illustrative 1280×720 correspondante est reglages-cookie.webm.
+
+## Preuve visuelle — pistolet et intention de tir
+
+Scénario déterministe : ouvrir `/?e2e=1&temps=5000`, verrouiller le pointeur par le crochet E2E,
+tirer trois fois, vérifier les intentions `1`, `2`, `3` espacées de 150 ms, puis avancer l’horloge
+de 180 ms. Le relecteur vérifie le pistolet au repos, l’éclair et le recul pendant le tir, le
+compteur augmenté exactement trois fois, la direction normalisée et la récupération visuelle.
+
+Commande exacte :
+
+```bash
+pnpm exec playwright test e2e/entrees-camera.spec.ts --workers=1
+```
+
+URL déterministe : `http://127.0.0.1:4173/?e2e=1&temps=5000`.
+
+La branche produit `pistolet-tir-repos-1280x720.png`, `pistolet-tir-eclair-recul-1280x720.png`,
+`pistolet-tir-recuperation-1280x720.png` et `pistolet-tir.webm`.
