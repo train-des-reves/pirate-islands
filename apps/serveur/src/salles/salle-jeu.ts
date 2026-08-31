@@ -49,7 +49,6 @@ interface DonneesClientSalle {
   readonly indexApparition: number;
   readonly dernierTirMs: number;
   readonly derniereSequence: number;
-  readonly dernierTirSequence: number;
   readonly prochaineReapparitionMs: number;
 }
 
@@ -133,7 +132,6 @@ export class SalleJeu extends Room<{
       indexApparition,
       dernierTirMs: 0,
       derniereSequence: 0,
-      dernierTirSequence: 0,
       prochaineReapparitionMs: 0,
     };
 
@@ -216,7 +214,6 @@ export class SalleJeu extends Room<{
       indexApparition: 0,
       dernierTirMs: 0,
       derniereSequence: 0,
-      dernierTirSequence: 0,
       prochaineReapparitionMs: 0,
     };
 
@@ -289,7 +286,6 @@ export class SalleJeu extends Room<{
       indexApparition: données.indexApparition,
       dernierTirMs: maintenant,
       derniereSequence: intentionAcceptee.sequence,
-      dernierTirSequence: données.dernierTirSequence,
       prochaineReapparitionMs: données.prochaineReapparitionMs,
     };
 
@@ -390,14 +386,12 @@ export class SalleJeu extends Room<{
         indexApparition: 0,
         dernierTirMs: 0,
         derniereSequence: 0,
-        dernierTirSequence: 0,
         prochaineReapparitionMs: 0,
       };
       client.userData = {
         indexApparition: donneesActuelles.indexApparition,
         dernierTirMs: donneesActuelles.dernierTirMs,
         derniereSequence: donneesActuelles.derniereSequence,
-        dernierTirSequence: donneesActuelles.dernierTirSequence,
         prochaineReapparitionMs: maintenant + DELAI_REAPPARITION_JOUEUR_MS,
       };
     }
@@ -438,8 +432,6 @@ export class SalleJeu extends Room<{
       ...données,
       indexApparition: indexReapparition,
       dernierTirMs: 0,
-      derniereSequence: 0,
-      dernierTirSequence: 0,
       prochaineReapparitionMs: 0,
     };
   }

@@ -410,6 +410,36 @@ describe('SalleJeu Colyseus', () => {
     serveurModeE2E = false;
   });
 
+  it('rejette le rejeu d’une séquence consommée après la réapparition', async () => {
+    serveurModeE2E = true;
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendreNombreJoueurs(salle, 1);
+    const sessionId = salle.sessionId;
+
+    // Premier tir accepté avec la séquence 1.
+    const { intention } = cibleDeterministe(salle);
+    const premierRésultat = attendreResultatTir(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+    await premierRésultat;
+
+    // Le joueur est tué par le mannequin E2E, puis réapparaît après le délai.
+    salle.send(NOMS_MESSAGES.degatsE2E, { degats: SANTE_JOUEUR_MAXIMALE });
+    await expect
+      .poll(() => salle.state.joueurs.get(sessionId)?.vivant, { timeout: 2_000 })
+      .toBe(false);
+    await new Promise((résoudre) => setTimeout(résoudre, 3_200));
+
+    // La séquence 1 déjà consommée est rejouée juste après la réapparition :
+    // le serveur doit la rejeter et déconnecter le joueur, sans dégât ajouté.
+    const départ = attendreDeconnexion(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+    serveurModeE2E = false;
+  });
+
   it('refuse une intention d’un tireur mort et le déconnecte', async () => {
     serveurModeE2E = true;
     const client = await ouvrirClient();
