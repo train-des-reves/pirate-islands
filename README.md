@@ -48,6 +48,10 @@ Les mêmes actions fonctionnent sur les claviers français et QWERTY :
 Un clic dans la scène verrouille le pointeur. La souris regarde autour du joueur, le déplacement
 reste relatif à son lacet et `Échap` libère le pointeur en ouvrant la pause.
 
+Le pistolet local attaché à la caméra tire au plus une fois toutes les 150 ms. Chaque tir accepté
+produit une intention typée (séquence, origine, direction normalisée et horodatage client), avec
+recul, récupération et éclair de bouche purement visuels.
+
 ## Monde déterministe
 
 Les URLs qui fournissent `graine` ou `camera` affichent l'océan et les trois îles produites par
