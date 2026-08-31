@@ -169,9 +169,9 @@ describe('machine à états de l’IA pirate', () => {
       expect(Math.abs(sortie.position.z)).toBeLessThanOrEqual(110);
       if (sortie.intentionDeplacement) {
         expect(Number.isFinite(sortie.intentionDeplacement.x)).toBe(true);
-        expect(Math.hypot(sortie.intentionDeplacement.x, sortie.intentionDeplacement.z)).toBeLessThanOrEqual(
-          PROFIL_MER.vitessePoursuite + 0.001,
-        );
+        expect(
+          Math.hypot(sortie.intentionDeplacement.x, sortie.intentionDeplacement.z),
+        ).toBeLessThanOrEqual(PROFIL_MER.vitessePoursuite + 0.001);
       }
     }
   });

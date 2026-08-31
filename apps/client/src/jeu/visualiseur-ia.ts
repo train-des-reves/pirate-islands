@@ -172,9 +172,7 @@ export function construireVisualiseurIa(
   attributsEtat.set('retour', 'Retour');
   attributsEtat.set('mort', 'Mort');
 
-  const chronologie = visualiseur.querySelector<HTMLOListElement>(
-    '[data-testid="ia-transitions"]',
-  );
+  const chronologie = visualiseur.querySelector<HTMLOListElement>('[data-testid="ia-transitions"]');
   const etatAffichage = visualiseur.querySelector<HTMLElement>('[data-testid="ia-etat"]');
   const tempsAffichage = visualiseur.querySelector<HTMLElement>('[data-testid="ia-temps"]');
   const positionAffichage = visualiseur.querySelector<HTMLElement>('[data-testid="ia-position"]');
@@ -225,7 +223,7 @@ export function construireVisualiseurIa(
       positionAffichage.textContent = `${étape.position.x.toFixed(1)} · ${étape.position.z.toFixed(1)}`;
     }
     if (capAffichage) {
-      capAffichage.textContent = `${(étape.cap * 180 / Math.PI).toFixed(0)}°`;
+      capAffichage.textContent = `${((étape.cap * 180) / Math.PI).toFixed(0)}°`;
     }
     if (jaugeRemplissage) {
       jaugeRemplissage.style.width = `${Math.min(1, Math.max(0, étape.progressionTemporisation)) * 100}%`;
@@ -272,7 +270,13 @@ export function construireVisualiseurIa(
     contexte.strokeStyle = COULEURS.ancrage;
     contexte.lineWidth = 2;
     contexte.beginPath();
-    contexte.arc(convertirX(SCENARIO_VISUALISEUR_IA.profil.pointAncrage.x), convertirZ(SCENARIO_VISUALISEUR_IA.profil.pointAncrage.z), 4, 0, Math.PI * 2);
+    contexte.arc(
+      convertirX(SCENARIO_VISUALISEUR_IA.profil.pointAncrage.x),
+      convertirZ(SCENARIO_VISUALISEUR_IA.profil.pointAncrage.z),
+      4,
+      0,
+      Math.PI * 2,
+    );
     contexte.stroke();
 
     // Trajectoire du pirate jusqu'à l'instant courant.

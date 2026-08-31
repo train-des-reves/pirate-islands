@@ -45,16 +45,14 @@ export interface ResultatSimulationPirate {
 }
 
 /** Construit un scénario d'IA à partir d'entrées fixes. */
-export function creerScenario(
-  options: {
-    readonly graine: string;
-    readonly profil: ProfilIaPirate;
-    readonly positionDepart?: Coordonnees;
-    readonly deltaSec?: number;
-    readonly dureeSec?: number;
-    readonly entreesCibles?: readonly EntreeCibleSimulation[];
-  },
-): ScenarioSimulationPirate {
+export function creerScenario(options: {
+  readonly graine: string;
+  readonly profil: ProfilIaPirate;
+  readonly positionDepart?: Coordonnees;
+  readonly deltaSec?: number;
+  readonly dureeSec?: number;
+  readonly entreesCibles?: readonly EntreeCibleSimulation[];
+}): ScenarioSimulationPirate {
   return {
     graine: options.graine,
     profil: options.profil,

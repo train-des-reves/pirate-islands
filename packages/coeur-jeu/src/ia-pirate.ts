@@ -248,7 +248,11 @@ export class MachineEtatPirate {
   }
 
   private patrouiller(delta: number, cible: CiblePerçue | undefined): void {
-    const atteint = this.avancerVersCible(delta, this.prochaineCiblePatrouille, this.profil.vitessePatrouille);
+    const atteint = this.avancerVersCible(
+      delta,
+      this.prochaineCiblePatrouille,
+      this.profil.vitessePatrouille,
+    );
 
     if (atteint) {
       this.prochaineCiblePatrouille = choisirCiblePatrouille(
@@ -402,7 +406,8 @@ export class MachineEtatPirate {
   private tournerVersCible(delta: number): void {
     const ecart = angleLePlusCourt(this.capCible - this.cap);
     const vitesseAngulaire = 3.2;
-    const variation = Math.min(Math.abs(ecart), Math.max(0, vitesseAngulaire) * delta) * Math.sign(ecart);
+    const variation =
+      Math.min(Math.abs(ecart), Math.max(0, vitesseAngulaire) * delta) * Math.sign(ecart);
     this.cap = normaliserAngle(this.cap + variation);
   }
 
@@ -465,15 +470,11 @@ export class MachineEtatPirate {
     if (this.etat === 'attaque' && this.temporisateurAttaque > 0) {
       return Math.min(1, 1 - this.temporisateurAttaque / Math.max(1, this.profil.cadenceAttaque));
     }
-    if (
-      (this.etat === 'retour' || this.etat === 'poursuite') &&
-      this.temporisateurRetour > 0
-    ) {
+    if ((this.etat === 'retour' || this.etat === 'poursuite') && this.temporisateurRetour > 0) {
       return Math.min(1, 1 - this.temporisateurRetour / Math.max(1, this.profil.delaiRetour));
     }
     return 0;
   }
-
 }
 
 function deltaSain(deltaSecondes: number): number {
@@ -544,10 +545,7 @@ function choisirCiblePatrouille(
   return bornerCoordonnees(cible, limites);
 }
 
-function bornerCoordonnees(
-  coordonnees: Coordonnees,
-  limites: LimitesZoneIaPirate,
-): Coordonnees {
+function bornerCoordonnees(coordonnees: Coordonnees, limites: LimitesZoneIaPirate): Coordonnees {
   return {
     x: bornerNombre(coordonnees.x, -limites.largeur / 2, limites.largeur / 2),
     z: bornerNombre(coordonnees.z, -limites.profondeur / 2, limites.profondeur / 2),
