@@ -7,21 +7,30 @@ import {
   EtatSalleSchema,
   NOMS_MESSAGES,
   NOM_SALLE_JEU,
+  SANTE_JOUEUR_MAXIMALE,
   type EtatSalle,
+  type MessageResultatTir,
 } from '@pirate/protocole';
+import { resoudreCibleTiree } from '@pirate/coeur-jeu';
 import { démarrerServeur, type ServeurDemarre } from '../apps/serveur/src/server.js';
 
 let serveur: ServeurDemarre | undefined;
+let serveurModeE2E = false;
 const sallesOuvertes: Room<unknown, EtatSalle>[] = [];
 
 afterEach(async () => {
   await Promise.all(sallesOuvertes.splice(0).map((salle) => salle.leave()));
   await serveur?.arreter();
   serveur = undefined;
+  serveurModeE2E = false;
 });
 
 async function ouvrirClient(): Promise<ReturnType<typeof creerClient>> {
-  serveur ??= await démarrerServeur({ host: '127.0.0.1', port: 0 });
+  serveur ??= await démarrerServeur({
+    host: '127.0.0.1',
+    port: 0,
+    ...(serveurModeE2E ? { modeE2E: true } : {}),
+  });
   return creerClient(serveur.url);
 }
 
@@ -91,6 +100,120 @@ async function attendreCondition(
     };
     salle.onStateChange(observer);
   });
+}
+
+async function attendrePirates(
+  salle: Room<unknown, EtatSalle>,
+  nombre: number,
+): Promise<void> {
+  if (salle.state.pirates.size >= nombre) {
+    return;
+  }
+
+  await new Promise<void>((résoudre, rejeter) => {
+    const délai = setTimeout(() => {
+      salle.onStateChange.remove(observer);
+      rejeter(new Error('Délai dépassé en attendant ' + nombre + ' pirates.'));
+    }, 5_000);
+    const observer = (): void => {
+      if (salle.state.pirates.size < nombre) {
+        return;
+      }
+
+      clearTimeout(délai);
+      salle.onStateChange.remove(observer);
+      résoudre();
+    };
+    salle.onStateChange(observer);
+  });
+}
+
+function attendreResultatTir(
+  salle: Room<unknown, EtatSalle>,
+): Promise<MessageResultatTir> {
+  return new Promise((résoudre, rejeter) => {
+    let détacher = (): void => undefined;
+    const délai = setTimeout(() => {
+      détacher();
+      rejeter(new Error('Délai dépassé en attendant le résultat du tir.'));
+    }, 5_000);
+    détacher = salle.onMessage(NOMS_MESSAGES.resultatTir, (message: unknown) => {
+      clearTimeout(délai);
+      détacher();
+      résoudre(message as MessageResultatTir);
+    });
+  });
+}
+
+function attendreDeconnexion(salle: Room<unknown, EtatSalle>): Promise<number> {
+  return new Promise((résoudre) => salle.onLeave.once(résoudre));
+}
+
+function creerIntentionDeTir(
+  origine: { readonly x: number; readonly y: number; readonly z: number },
+  direction: { readonly x: number; readonly y: number; readonly z: number },
+  sequence = 1,
+  horodatageClient = 0,
+): Record<string, unknown> {
+  return {
+    sequence,
+    origineX: origine.x,
+    origineY: origine.y,
+    origineZ: origine.z,
+    directionX: direction.x,
+    directionY: direction.y,
+    directionZ: direction.z,
+    horodatageClient,
+  };
+}
+
+/** Retrouve un pirate joignable depuis l'apparition, pour une visée déterministe. */
+function cibleDeterministe(
+  salle: Room<unknown, EtatSalle>,
+  positionJoueur: { readonly x: number; readonly y: number; readonly z: number } = {
+    x: -3,
+    y: 1.62,
+    z: 0,
+  },
+): { readonly identifiant: string; readonly intention: Record<string, unknown> } {
+  const origine = positionJoueur;
+  const pirates = [...salle.state.pirates.values()];
+  for (const pirate of pirates) {
+    const torse = {
+      x: pirate.transformation.x,
+      y: pirate.transformation.y + 1,
+      z: pirate.transformation.z,
+    };
+    const vers = {
+      x: torse.x - origine.x,
+      y: torse.y - origine.y,
+      z: torse.z - origine.z,
+    };
+    const longueur = Math.hypot(vers.x, vers.y, vers.z);
+    if (longueur <= 0) {
+      continue;
+    }
+    const direction = {
+      x: vers.x / longueur,
+      y: vers.y / longueur,
+      z: vers.z / longueur,
+    };
+    const cibles = pirates.map((entrée) => ({
+      identifiant: entrée.identifiant,
+      position: {
+        x: entrée.transformation.x,
+        y: entrée.transformation.y,
+        z: entrée.transformation.z,
+      },
+      sante: entrée.sante,
+      vivant: entrée.vivant,
+    }));
+    if (resoudreCibleTiree(origine, direction, cibles) === pirate.identifiant) {
+      return { identifiant: pirate.identifiant, intention: creerIntentionDeTir(origine, direction) };
+    }
+  }
+
+  throw new Error('Aucun pirate joignable depuis l’apparition.');
 }
 
 describe('SalleJeu Colyseus', () => {
@@ -232,6 +355,43 @@ describe('SalleJeu Colyseus', () => {
     sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
   });
 
+  it('accepte une intention valide et réduit une seule cible pirate', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client, undefined, { graine: 'graine-test' });
+    await attendrePirates(salle, 9);
+    const { identifiant, intention } = cibleDeterministe(salle);
+    const résultat = attendreResultatTir(salle);
+
+    salle.send(NOMS_MESSAGES.intentionTir, intention);
+
+    const message = await résultat;
+    expect(message.sequence).toBe(1);
+    expect(message.cibleId).toBe(identifiant);
+    expect(message.degats).toBe(25);
+    expect(message.pirateNeutralise).toBe(false);
+    await expect
+      .poll(() => salle.state.pirates.get(identifiant)?.sante, { timeout: 2_000 })
+      .toBe(75);
+  });
+
+  it('rejette une origine de tir falsifiée et déconnecte le client', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendrePirates(salle, 9);
+    const { intention } = cibleDeterministe(salle);
+    const départ = attendreDeconnexion(salle);
+
+    salle.send(NOMS_MESSAGES.intentionTir, {
+      ...intention,
+      origineX: 1000,
+      origineY: 0,
+      origineZ: 0,
+    });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
   it('ignore une transformation à vitesse manifestement impossible', async () => {
     const client = await ouvrirClient();
     const salle = await rejoindreSalle(client);
@@ -260,5 +420,197 @@ describe('SalleJeu Colyseus', () => {
 
     await new Promise((résoudre) => setTimeout(résoudre, 300));
     expect(salle.state.joueurs.get(sessionId)?.transformation.x).toBe(0);
+  });
+
+  it('rejette une séquence d’intention rejouée', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendrePirates(salle, 9);
+    const { intention } = cibleDeterministe(salle);
+    const premierRésultat = attendreResultatTir(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, intention);
+    await premierRésultat;
+
+    const départ = attendreDeconnexion(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
+  it('rejette deux tirs trop rapprochés (cadence abusive)', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendrePirates(salle, 9);
+    const { intention } = cibleDeterministe(salle);
+    const premierRésultat = attendreResultatTir(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, intention);
+    await premierRésultat;
+
+    const départ = attendreDeconnexion(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 2 });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
+  it('neutralise un pirate après plusieurs tirs acceptés', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client, undefined, { graine: 'graine-test' });
+    await attendrePirates(salle, 9);
+    const { identifiant, intention } = cibleDeterministe(salle);
+
+    for (let index = 0; index < 4; index += 1) {
+      const résultat = attendreResultatTir(salle);
+      salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: index + 1 });
+      const message = await résultat;
+      if (index < 3) {
+        expect(message.degats).toBe(25);
+        await new Promise((résoudre) => setTimeout(résoudre, 160));
+      } else {
+        expect(message.pirateNeutralise).toBe(true);
+      }
+    }
+
+    await expect
+      .poll(() => salle.state.pirates.get(identifiant)?.sante, { timeout: 2_000 })
+      .toBe(0);
+    await expect
+      .poll(() => salle.state.pirates.get(identifiant)?.vivant, { timeout: 2_000 })
+      .toBe(false);
+  });
+
+  it('réapparaît le joueur après des dégâts E2E l’ayant tué', async () => {
+    serveurModeE2E = true;
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendreNombreJoueurs(salle, 1);
+    const sessionId = salle.sessionId;
+    const joueur = salle.state.joueurs.get(sessionId);
+    expect(joueur?.vivant).toBe(true);
+
+    salle.send(NOMS_MESSAGES.degatsE2E, { degats: SANTE_JOUEUR_MAXIMALE });
+
+    await expect
+      .poll(() => salle.state.joueurs.get(sessionId)?.vivant, { timeout: 2_000 })
+      .toBe(false);
+
+    // La réapparition est déclenchée par la prochaine action réseau traitée après
+    // l'échéance. On envoie une intention de tir valide après le délai.
+    await new Promise((résoudre) => setTimeout(résoudre, 3_200));
+    const { intention } = cibleDeterministe(salle, { x: 3, y: 1.62, z: 0 });
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+
+    await expect
+      .poll(
+        () =>
+          salle.state.joueurs.get(sessionId)?.vivant &&
+          salle.state.joueurs.get(sessionId)?.sante === SANTE_JOUEUR_MAXIMALE,
+        { timeout: 6_000 },
+      )
+      .toBe(true);
+    await expect
+      .poll(() => salle.state.joueurs.get(sessionId)?.statut, { timeout: 2_000 })
+      .toBe('actif');
+    serveurModeE2E = false;
+  });
+
+  it('rejette le rejeu d’une séquence consommée après la réapparition', async () => {
+    serveurModeE2E = true;
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendreNombreJoueurs(salle, 1);
+    const sessionId = salle.sessionId;
+
+    // Premier tir accepté avec la séquence 1.
+    const { intention } = cibleDeterministe(salle);
+    const premierRésultat = attendreResultatTir(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+    await premierRésultat;
+
+    // Le joueur est tué par le mannequin E2E, puis réapparaît après le délai.
+    salle.send(NOMS_MESSAGES.degatsE2E, { degats: SANTE_JOUEUR_MAXIMALE });
+    await expect
+      .poll(() => salle.state.joueurs.get(sessionId)?.vivant, { timeout: 2_000 })
+      .toBe(false);
+    await new Promise((résoudre) => setTimeout(résoudre, 3_200));
+
+    // La séquence 1 déjà consommée est rejouée juste après la réapparition :
+    // le serveur doit la rejeter et déconnecter le joueur, sans dégât ajouté.
+    const départ = attendreDeconnexion(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+    serveurModeE2E = false;
+  });
+
+  it('refuse une intention d’un tireur mort et le déconnecte', async () => {
+    serveurModeE2E = true;
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendreNombreJoueurs(salle, 1);
+    const sessionId = salle.sessionId;
+
+    salle.send(NOMS_MESSAGES.degatsE2E, { degats: SANTE_JOUEUR_MAXIMALE });
+    await expect
+      .poll(() => salle.state.joueurs.get(sessionId)?.vivant, { timeout: 2_000 })
+      .toBe(false);
+
+    const { intention } = cibleDeterministe(salle, { x: 3, y: 1.62, z: 0 });
+    const départ = attendreDeconnexion(salle);
+    salle.send(NOMS_MESSAGES.intentionTir, { ...intention, sequence: 1 });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+    serveurModeE2E = false;
+  });
+
+  it('n’inflige aucun dégât à un joueur touché par un tir ami', async () => {
+    serveurModeE2E = true;
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient, undefined, {
+      graine: 'graine-test',
+    });
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId, {
+      graine: 'graine-test',
+    });
+    await attendreNombreJoueurs(premièreSalle, 2);
+
+    const premierSession = premièreSalle.sessionId;
+    const secondSession = secondeSalle.sessionId;
+    const premierJoueur = premièreSalle.state.joueurs.get(premierSession);
+    const secondJoueur = premièreSalle.state.joueurs.get(secondSession);
+    const positionTireur = premierJoueur?.transformation;
+    const positionCible = secondJoueur?.transformation;
+    expect(positionTireur && positionCible).toBeTruthy();
+
+    const origine = {
+      x: positionTireur!.x,
+      y: positionTireur!.y + 1.62,
+      z: positionTireur!.z,
+    };
+    const vers = {
+      x: positionCible!.x - origine.x,
+      y: positionCible!.y + 1 - origine.y,
+      z: positionCible!.z - origine.z,
+    };
+    const longueur = Math.hypot(vers.x, vers.y, vers.z);
+    const direction = {
+      x: vers.x / longueur,
+      y: vers.y / longueur,
+      z: vers.z / longueur,
+    };
+    const intention = creerIntentionDeTir(origine, direction);
+    const résultat = attendreResultatTir(premièreSalle);
+    premièreSalle.send(NOMS_MESSAGES.intentionTir, intention);
+    const message = await résultat;
+
+    expect(message.cibleId).toBeNull();
+    expect(message.degats).toBe(0);
+    expect(premièreSalle.state.joueurs.get(secondSession)?.sante).toBe(SANTE_JOUEUR_MAXIMALE);
+    expect(premièreSalle.state.joueurs.get(secondSession)?.vivant).toBe(true);
+    serveurModeE2E = false;
   });
 });
