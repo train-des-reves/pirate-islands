@@ -273,12 +273,24 @@ export class GestionnaireEntrees {
     this.onPause = options.onPause;
     this.onChangementVerrouillage = options.onChangementVerrouillage;
 
-    const liaisons = options.liaisons ?? LIAISONS_PAR_DEFAUT;
+    this.mettreAJourLiaisons(options.liaisons ?? LIAISONS_PAR_DEFAUT);
+  }
+
+  /**
+   * Remplace les liaisons actives après validation par l'interface des
+   * réglages. Le gameplay conserve ainsi le même contrat d'actions sémantiques.
+   */
+  public mettreAJourLiaisons(
+    liaisons: Readonly<Partial<Record<ActionJeu, readonly string[]>>>,
+  ): void {
+    this.actionParCode.clear();
+    this.actionParBouton.clear();
+
     for (const action of ACTIONS_JEU) {
       for (const code of liaisons[action] ?? []) {
         if (code.startsWith('Mouse')) {
           const bouton = Number(code.slice('Mouse'.length));
-          if (Number.isInteger(bouton)) {
+          if (Number.isInteger(bouton) && bouton >= 0) {
             this.actionParBouton.set(bouton, action);
           }
         } else {
@@ -286,6 +298,8 @@ export class GestionnaireEntrees {
         }
       }
     }
+
+    this.reinitialiserEtat();
   }
 
   public attacher(): void {

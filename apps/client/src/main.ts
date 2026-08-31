@@ -15,7 +15,7 @@ import { GRAINE_MVP_PAR_DEFAUT, genererMonde } from '@pirate/coeur-jeu';
 import { estReponseSante, type OptionsConnexion } from '@pirate/protocole';
 
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
-import { creerEtatActions, GestionnaireEntrees } from './jeu/entrees';
+import { ACTIONS_JEU, creerEtatActions, GestionnaireEntrees, type ActionJeu } from './jeu/entrees';
 import { construireBacASable } from './jeu/monde-test';
 import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
 import { construireGaleriePiratesE2E } from './jeu/pirate';
@@ -27,6 +27,24 @@ import {
   type IntentionTir,
 } from './jeu/tir';
 import { construireMondeBabylon, installerMarqueursE2E, type ModeCameraMonde } from './jeu/scene';
+import {
+  annulerReglages,
+  appliquerReglages,
+  avecMessageReglages,
+  chargerReglagesDepuisCookie,
+  construireLiaisonsEntrees,
+  creerEtatReglages,
+  enregistrerReglagesCookie,
+  libelleAction,
+  libelleCodeTouche,
+  modifierInversionReglages,
+  modifierLiaisonReglages,
+  ouvrirReglages,
+  reinitialiserReglages,
+  validerLiaison,
+  type EtatReglages,
+  type ReglagesJeu,
+} from './interface/reglages';
 import {
   afficherErreurDiagnosticSalle,
   connecterDiagnosticSalle,
@@ -53,8 +71,36 @@ const canvas = document.querySelector<HTMLCanvasElement>('#scene-canvas');
 const application = document.querySelector<HTMLElement>('#app');
 const indicateurServeur = document.querySelector<HTMLElement>('[data-testid="serveur-status"]');
 const calquePause = document.querySelector<HTMLElement>('[data-testid="pause-overlay"]');
+const calqueReglages = document.querySelector<HTMLElement>('[data-testid="reglages-overlay"]');
 const diagnostic = document.querySelector<HTMLElement>('[data-testid="diagnostic-jeu"]');
 const etatPointeur = document.querySelector<HTMLElement>('[data-testid="etat-pointeur"]');
+const caseInversion = document.querySelector<HTMLInputElement>(
+  '[data-testid="inversion-verticale"]',
+);
+const etatInversion = document.querySelector<HTMLElement>('[data-testid="etat-inversion"]');
+const messageReglages = document.querySelector<HTMLElement>('[data-testid="reglages-message"]');
+const boutonReprendre = document.querySelector<HTMLButtonElement>('[data-testid="reprendre-jeu"]');
+const boutonOuvrirReglages = document.querySelector<HTMLButtonElement>(
+  '[data-testid="ouvrir-reglages"]',
+);
+const boutonAnnulerReglages = document.querySelector<HTMLButtonElement>(
+  '[data-testid="annuler-reglages"]',
+);
+const boutonAppliquerReglages = document.querySelector<HTMLButtonElement>(
+  '[data-testid="appliquer-reglages"]',
+);
+const boutonReinitialiserReglages = document.querySelector<HTMLButtonElement>(
+  '[data-testid="reinitialiser-reglages"]',
+);
+const boutonsTouches = new Map<ActionJeu, HTMLButtonElement>();
+for (const ligne of document.querySelectorAll<HTMLElement>('[data-reglage-action]')) {
+  const action = ligne.dataset.reglageAction;
+  const bouton = ligne.querySelector<HTMLButtonElement>('.touche-reglage');
+  if (bouton === null || !ACTIONS_JEU.includes(action as ActionJeu)) {
+    continue;
+  }
+  boutonsTouches.set(action as ActionJeu, bouton);
+}
 const diagnosticSalle = document.querySelector<HTMLElement>('[data-testid="diagnostic-salle"]');
 const diagnosticSalleId = document.querySelector<HTMLElement>(
   '[data-testid="diagnostic-salle-id"]',
@@ -91,8 +137,18 @@ if (
   !application ||
   !indicateurServeur ||
   !calquePause ||
+  !calqueReglages ||
   !diagnostic ||
   !etatPointeur ||
+  !caseInversion ||
+  !etatInversion ||
+  !messageReglages ||
+  !boutonReprendre ||
+  !boutonOuvrirReglages ||
+  !boutonAnnulerReglages ||
+  !boutonAppliquerReglages ||
+  !boutonReinitialiserReglages ||
+  boutonsTouches.size !== ACTIONS_JEU.length ||
   !diagnosticSalle ||
   !diagnosticSalleId ||
   !diagnosticSessionId ||
@@ -121,8 +177,168 @@ const canvasJeu = canvas;
 const conteneurApplication = application;
 const statutServeur = indicateurServeur;
 const overlayPause = calquePause;
+const overlayReglages = calqueReglages;
 const diagnosticJeu = diagnostic;
 const indicateurPointeur = etatPointeur;
+const inputInversion = caseInversion;
+const texteInversion = etatInversion;
+const statutReglages = messageReglages;
+const boutonReprendreJeu = boutonReprendre;
+const boutonOuvrir = boutonOuvrirReglages;
+const boutonAnnuler = boutonAnnulerReglages;
+const boutonAppliquer = boutonAppliquerReglages;
+const boutonReinitialiser = boutonReinitialiserReglages;
+
+let reglages = creerEtatReglages(chargerReglagesDepuisCookie(document.cookie));
+let actionReglageEnCours: ActionJeu | undefined;
+let mettreAJourEntreesActives: ((valeur: ReglagesJeu) => void) | undefined;
+let reprendreJeuActif: (() => void) | undefined;
+let rafraichirInterfaceJeu: (() => void) | undefined;
+let elementFocusAvantReglages: HTMLElement | null = null;
+
+function afficherReglages(etat: EtatReglages): void {
+  overlayReglages.hidden = !etat.ouvert;
+  inputInversion.checked = etat.brouillon.inversionVerticale;
+  texteInversion.textContent = etat.brouillon.inversionVerticale ? 'Oui' : 'Non';
+  statutReglages.textContent = etat.message;
+  statutReglages.dataset.etat = etat.message === '' ? 'vide' : 'information';
+
+  for (const action of ACTIONS_JEU) {
+    const bouton = boutonsTouches.get(action);
+    if (bouton === undefined) {
+      continue;
+    }
+    const enCapture = actionReglageEnCours === action;
+    bouton.textContent = enCapture
+      ? 'Appuyez sur une touche…'
+      : etat.brouillon.liaisons[action].map(libelleCodeTouche).join(' / ');
+    bouton.dataset.capture = enCapture ? 'oui' : 'non';
+    bouton.setAttribute(
+      'aria-label',
+      enCapture
+        ? 'Appuyez sur une touche pour ' + libelleAction(action)
+        : 'Modifier la touche de ' + libelleAction(action),
+    );
+  }
+}
+
+function clonerReglagesPourLecture(reglages: ReglagesJeu): ReglagesJeu {
+  const liaisons = {} as Record<ActionJeu, readonly string[]>;
+  for (const action of ACTIONS_JEU) {
+    liaisons[action] = [...reglages.liaisons[action]];
+  }
+  return {
+    inversionVerticale: reglages.inversionVerticale,
+    liaisons,
+  };
+}
+
+function memoriserFocus(): void {
+  elementFocusAvantReglages =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+}
+
+function restaurerFocus(): void {
+  const element = elementFocusAvantReglages;
+  elementFocusAvantReglages = null;
+  element?.focus();
+}
+
+function ouvrirReglagesInterface(): void {
+  memoriserFocus();
+  reglages = ouvrirReglages(reglages);
+  actionReglageEnCours = undefined;
+  afficherReglages(reglages);
+  rafraichirInterfaceJeu?.();
+  inputInversion.focus();
+}
+
+function fermerReglagesInterface(etat: EtatReglages): void {
+  reglages = etat;
+  actionReglageEnCours = undefined;
+  afficherReglages(reglages);
+  rafraichirInterfaceJeu?.();
+  restaurerFocus();
+}
+
+function annulerReglagesInterface(): void {
+  fermerReglagesInterface(annulerReglages(reglages));
+}
+
+function appliquerReglagesInterface(): void {
+  const résultat = appliquerReglages(reglages);
+  reglages = résultat.etat;
+  if (!résultat.applique) {
+    afficherReglages(reglages);
+    rafraichirInterfaceJeu?.();
+    return;
+  }
+
+  enregistrerReglagesCookie(reglages.applique);
+  mettreAJourEntreesActives?.(reglages.applique);
+  fermerReglagesInterface(reglages);
+}
+
+function réinitialiserReglagesInterface(): void {
+  reglages = reinitialiserReglages(reglages);
+  afficherReglages(reglages);
+  rafraichirInterfaceJeu?.();
+}
+
+function capturerToucheReglage(evenement: KeyboardEvent): void {
+  if (!reglages.ouvert || actionReglageEnCours === undefined) {
+    if (reglages.ouvert && actionReglageEnCours === undefined && evenement.code === 'Escape') {
+      evenement.preventDefault();
+      evenement.stopImmediatePropagation();
+      annulerReglagesInterface();
+    }
+    return;
+  }
+
+  evenement.preventDefault();
+  evenement.stopImmediatePropagation();
+  const action = actionReglageEnCours;
+  const validation = validerLiaison(action, evenement.code, reglages.brouillon.liaisons);
+  if (!validation.valide) {
+    reglages = avecMessageReglages(
+      reglages,
+      validation.erreur?.message ?? 'Cette touche ne peut pas être utilisée.',
+    );
+    afficherReglages(reglages);
+    rafraichirInterfaceJeu?.();
+    return;
+  }
+
+  reglages = modifierLiaisonReglages(reglages, action, evenement.code);
+  actionReglageEnCours = undefined;
+  afficherReglages(reglages);
+  rafraichirInterfaceJeu?.();
+}
+
+inputInversion.addEventListener('change', () => {
+  reglages = modifierInversionReglages(reglages, inputInversion.checked);
+  afficherReglages(reglages);
+  rafraichirInterfaceJeu?.();
+});
+
+boutonReprendreJeu.addEventListener('click', () => {
+  reprendreJeuActif?.();
+});
+boutonOuvrir.addEventListener('click', ouvrirReglagesInterface);
+boutonAnnuler.addEventListener('click', annulerReglagesInterface);
+boutonAppliquer.addEventListener('click', appliquerReglagesInterface);
+boutonReinitialiser.addEventListener('click', réinitialiserReglagesInterface);
+
+for (const [action, bouton] of boutonsTouches) {
+  bouton.addEventListener('click', () => {
+    actionReglageEnCours = action;
+    reglages = avecMessageReglages(reglages, '');
+    afficherReglages(reglages);
+  });
+}
+
+window.addEventListener('keydown', capturerToucheReglage, true);
+afficherReglages(reglages);
 const diagnosticSalleJeu = diagnosticSalle;
 const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
   conteneur: diagnosticSalleJeu,
@@ -153,6 +369,7 @@ interface EtatJeuE2E {
   readonly pause: boolean;
   readonly pointeurVerrouille: boolean;
   readonly collision: EtatJoueur['collision'];
+  readonly reglages: ReglagesJeu;
   readonly tir: {
     readonly compteur: number;
     readonly etat: { readonly recul: number; readonly eclairBouche: boolean };
@@ -167,6 +384,7 @@ declare global {
       verrouillerPointeur: () => void;
       libererPointeur: () => void;
       lireEtat: () => EtatJeuE2E;
+      lireReglages: () => ReglagesJeu;
       reinitialiser: () => void;
       tirer: (nombre?: number) => void;
       avancerTemps: (deltaMs: number) => void;
@@ -392,6 +610,7 @@ function construireScene(): JeuClient | undefined {
       verrouillageE2EForce = false;
       enPause = true;
       actualiserInterface();
+      boutonReprendreJeu.focus();
     };
 
     const reprendreJeu = (verrouille: boolean): void => {
@@ -405,14 +624,35 @@ function construireScene(): JeuClient | undefined {
       cible: window,
       document: window.document,
       elementVerrouillage: canvasJeu,
+      liaisons: construireLiaisonsEntrees(reglages.applique),
       onPause: mettreEnPause,
       onChangementVerrouillage: reprendreJeu,
     });
     const camera = new CameraPremierePersonne(cameraBabylon, {
-      // Le réglage réel sera injecté par l'issue des préférences; le défaut
-      // produit reste non inversé sans ajouter d'interface hors périmètre.
-      inversionVerticale: () => false,
+      inversionVerticale: () => reglages.applique.inversionVerticale,
     });
+
+    mettreAJourEntreesActives = (valeur: ReglagesJeu): void => {
+      entrees.mettreAJourLiaisons(construireLiaisonsEntrees(valeur));
+    };
+
+    reprendreJeuActif = (): void => {
+      boutonReprendreJeu.blur();
+      enPause = false;
+      verrouillageE2EForce = modeE2E;
+      if (modeE2E) {
+        entrees.simulerVerrouillage(true);
+      } else {
+        try {
+          void Promise.resolve(canvasJeu.requestPointerLock?.()).catch(() => {
+            verrouillageE2EForce = false;
+          });
+        } catch {
+          verrouillageE2EForce = false;
+        }
+      }
+      actualiserInterface();
+    };
 
     const lireEtat = (): EtatJeuE2E => ({
       position: { ...joueur.position },
@@ -420,6 +660,7 @@ function construireScene(): JeuClient | undefined {
       pause: enPause,
       pointeurVerrouille: entrees.estPointeurVerrouille(),
       collision: derniereCollision,
+      reglages: clonerReglagesPourLecture(reglages.applique),
       tir: {
         compteur: gestionnaireTir.lireCompteur(),
         etat: pistolet.lireEtat(),
@@ -428,11 +669,14 @@ function construireScene(): JeuClient | undefined {
       },
     });
 
+    const lireReglages = (): ReglagesJeu => clonerReglagesPourLecture(reglages.applique);
+
     const actualiserInterface = (): void => {
       const etat = lireEtat();
       conteneurApplication.dataset.pause = etat.pause ? 'oui' : 'non';
       conteneurApplication.dataset.pointeur = etat.pointeurVerrouille ? 'verrouille' : 'libere';
       conteneurApplication.dataset.collision = etat.collision;
+      conteneurApplication.dataset.inversion = reglages.applique.inversionVerticale ? 'oui' : 'non';
       overlayPause.hidden = !etat.pause;
       indicateurPointeur.textContent = etat.pointeurVerrouille
         ? 'Pointeur verrouillé · Échap pour la pause'
@@ -451,6 +695,8 @@ function construireScene(): JeuClient | undefined {
       indicateurTir.textContent = 'Tirs locaux · ' + etat.tir.compteur;
       diagnosticJeu.textContent = `Position ${etat.position.x.toFixed(1)} · ${etat.position.y.toFixed(1)} · ${etat.position.z.toFixed(1)}`;
     };
+
+    rafraichirInterfaceJeu = actualiserInterface;
 
     const crochetE2E = (): void => {
       if (!modeE2E) {
@@ -483,6 +729,7 @@ function construireScene(): JeuClient | undefined {
           actualiserInterface();
         },
         lireEtat,
+        lireReglages,
         reinitialiser: () => {
           verrouillageE2EForce = false;
           entrees.reinitialiserEtat();
@@ -577,6 +824,9 @@ function construireScene(): JeuClient | undefined {
         moteur.stopRenderLoop(boucle);
         pistolet.liberer();
         moteur.dispose();
+        mettreAJourEntreesActives = undefined;
+        reprendreJeuActif = undefined;
+        rafraichirInterfaceJeu = undefined;
         delete window.__pirateIslandsE2E;
       },
     };
