@@ -662,10 +662,24 @@ function construireScene(): JeuClient | undefined {
         stencil: true,
       });
       const scenePresentation = new Scene(moteurPresentation);
+      const interfacePechePresentation = {
+        afficherInvite: (invite: string | null) => {
+          invitePeche.hidden = invite === null;
+          if (invite !== null) {
+            texteInvitePeche.textContent = invite;
+          }
+        },
+        afficherStatut: (statut: string) => {
+          statutPeche.hidden = false;
+          statutPeche.textContent = statut;
+        },
+        afficherResultat: () => undefined,
+      };
       const presentationBabylon = construirePresentationCanne(
         moteurPresentation,
         scenePresentation,
         graine,
+        interfacePechePresentation,
       );
       const harnais = construireHarnaisCanne(graine, 1);
       const presentation = monterPresentationCanne(harnais, conteneurApplication);
@@ -1173,14 +1187,16 @@ function construireScene(): JeuClient | undefined {
 
       if (!enPause && dernierEtatEntrees.pointeurVerrouille) {
         camera.regarder(dernierEtatEntrees.regardX, dernierEtatEntrees.regardY);
-        const consomméParPêche =
-          modePeche?.actualiser({
-            tirer: dernierEtatEntrees.tirer,
-            interagir: dernierEtatEntrees.interagir,
-          }) ?? false;
-        const activerPistolet = !(modePeche?.estModeActif() ?? false);
-        pistolet.setVisible(activerPistolet);
-        if (!consomméParPêche) {
+        modePeche?.actualiser({
+          tirer: dernierEtatEntrees.tirer,
+          interagir: dernierEtatEntrees.interagir,
+        });
+        // L'exclusivité est décidée par l'état du mode, pas par le retour de
+        // `actualiser` : dès que le mode est actif, `tirer` est consommé par la
+        // canne et le pistolet ne doit jamais recevoir l'action du même cadre.
+        const modePecheActif = modePeche.estModeActif();
+        pistolet.setVisible(!modePecheActif);
+        if (!modePecheActif) {
           gestionnaireTir.actualiser(dernierEtatEntrees.tirer, tempsTir);
         }
         pistolet.actualiser(tempsTir);

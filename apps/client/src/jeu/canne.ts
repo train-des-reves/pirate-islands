@@ -50,6 +50,36 @@ export function construireAdaptateurPecheCoeurJeu(monde: DescripteurMonde): Adap
   };
 }
 
+/**
+ * Adaptateur neutre utilisé par le mode de production. Il ne décide jamais
+ * qu'un poisson est pris : il ne fait qu'afficher la ligne lancée et la
+ * remontée sans produire de morsure ni de résultat de prise. L'autorité de
+ * pêche (morsure, prise, validation) revient au serveur dans une issue
+ * ultérieure et est injectée via cet adaptateur.
+ */
+export const AdaptateurPecheNeutre: AdaptateurPeche = {
+  lancer: (etat, zoneId, _graine, sequence, temps): EtatPeche => ({
+    ...etat,
+    phase: 'attente',
+    zoneId,
+    sequence,
+    lanceAuMs: temps,
+    tempsCourantMs: temps,
+  }),
+  avancer: (etat): EtatPeche => etat,
+  relever: (etat, temps): EtatPeche => ({
+    ...etat,
+    phase: 'terminee',
+    tempsCourantMs: temps,
+  }),
+  annuler: (etat, temps): EtatPeche => ({
+    ...etat,
+    phase: 'terminee',
+    resultat: 'annulee',
+    tempsCourantMs: temps,
+  }),
+};
+
 export interface GestionnaireCanneOptions {
   readonly lireZone: () => ZonePeche | undefined;
   readonly lirePosition: () => Vecteur3;

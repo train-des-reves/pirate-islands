@@ -2,8 +2,9 @@ import { genererMonde, type ZonePeche } from '@pirate/coeur-jeu';
 import type { FreeCamera, Scene } from 'babylonjs';
 
 import {
-  construireAdaptateurPecheCoeurJeu,
+  AdaptateurPecheNeutre,
   GestionnaireCanne,
+  type AdaptateurPeche,
   type EtatCanne,
   type InterfacePeche,
 } from './canne';
@@ -18,6 +19,7 @@ export interface OptionsModePeche {
   readonly camera: FreeCamera;
   readonly scene: Scene;
   readonly interfacePeche: InterfacePeche;
+  readonly adaptateur?: AdaptateurPeche;
 }
 
 export interface ModePeche {
@@ -46,7 +48,9 @@ function zoneProcheDe(position: Vecteur3, zones: readonly ZonePeche[]): ZonePech
 export function construireModePeche(options: OptionsModePeche): ModePeche {
   const monde = genererMonde(options.graine);
   const zones = monde.zonesPeche;
-  const adaptateur = construireAdaptateurPecheCoeurJeu(monde);
+  // En production, l'adaptateur est neutre : aucune morsure ni prise n'est
+  // déduite par le client. La fixture E2E injecte l'adaptateur déterministe.
+  const adaptateur = options.adaptateur ?? AdaptateurPecheNeutre;
 
   const gestionnaire = new GestionnaireCanne({
     lireZone: () => zoneProcheDe(options.lirePosition(), zones),

@@ -79,4 +79,38 @@ describe('routage exclusif des actions tirer', () => {
     gestionnaireTir.actualiser(true, 500);
     expect(intentions).toHaveLength(1);
   });
+
+  it('bloque le pistolet quand interagir et tirer sont pressés ensemble depuis la rangée', () => {
+    const zone = zoneDeMonde();
+    const intentions: IntentionTir[] = [];
+    const monde = genererMonde('peche-mvp-v1');
+    const gestionnaireTir = new GestionnaireTirLocal({
+      obtenirVisee: () => ({ origine: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 } }),
+      emetteur: { émettre: (intention) => intentions.push(intention) },
+      lireHorodatage: () => 500,
+    });
+    const gestionnaireCanne = new GestionnaireCanne({
+      lireZone: () => zone,
+      lirePosition: () => ({ x: zone.centre.x, y: 0, z: zone.centre.z }),
+      lireHorodatage: () => 500,
+      graine: 'peche-mvp-v1',
+      interfacePeche: {
+        afficherInvite: () => undefined,
+        afficherStatut: () => undefined,
+        afficherResultat: () => undefined,
+      },
+      adaptateur: construireAdaptateurPecheCoeurJeu(monde),
+    });
+
+    // Simule la décision de main.ts : on consomme les actions puis on
+    // n'arme le pistolet que si le mode n'est PAS actif.
+    gestionnaireCanne.actualiser({ tirer: true, interagir: true });
+    const modeActif = gestionnaireCanne.estModeActif();
+    expect(modeActif).toBe(true);
+    if (!modeActif) {
+      gestionnaireTir.actualiser(true, 500);
+    }
+    expect(intentions).toHaveLength(0);
+    expect(gestionnaireTir.lireCompteur()).toBe(0);
+  });
 });

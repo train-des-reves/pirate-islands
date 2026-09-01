@@ -177,6 +177,49 @@ describe('contrôleur de canne locale', () => {
     faux.gestionnaire.actualiser({ tirer: false, interagir: true });
     expect(faux.gestionnaire.estModeActif()).toBe(true);
   });
+
+  it('réinitialise proprement pendant le lancer (pause, perte de focus) sans doublon', () => {
+    const zone = zoneDeMonde();
+    const faux = construire(zone, { x: zone.centre.x, y: 0, z: zone.centre.z });
+    const { gestionnaire } = faux;
+    gestionnaire.actualiser({ tirer: false, interagir: true });
+    const consommé = gestionnaire.actualiser({ tirer: true, interagir: false });
+    expect(consommé).toBe(true);
+    const avant = gestionnaire.lireEtat();
+    expect(avant.vue).toBe('lancee');
+
+    // Pause / perte de focus : reinitialiser remet la canne en rangee.
+    gestionnaire.reinitialiser();
+    expect(gestionnaire.lireEtat().vue).toBe('rangee');
+    expect(gestionnaire.lireEtat().peche.phase).toBe('inactive');
+
+    // Re-initialiser est idempotent : aucun doublon d'état ni d'intention.
+    gestionnaire.reinitialiser();
+    expect(gestionnaire.lireEtat().sequence).toBe(0);
+    expect(faux.statuts.filter((s) => s === 'Canne rangée')).toHaveLength(2);
+  });
+
+  it('ignore une morsure arrivant après annulation (état serveur obsolète)', () => {
+    const zone = zoneDeMonde();
+    const faux = construire(zone, { x: zone.centre.x, y: 0, z: zone.centre.z });
+    const { gestionnaire, avancer } = faux;
+    gestionnaire.actualiser({ tirer: false, interagir: true });
+    gestionnaire.actualiser({ tirer: true, interagir: false });
+    const delai = delaiPredit();
+    avancer(delai);
+
+    gestionnaire.actualiser({ tirer: false, interagir: false });
+    expect(gestionnaire.lireEtat().vue).toBe('morsure');
+
+    // Annulation : la canne repart en remontee.
+    gestionnaire.annuler();
+    expect(gestionnaire.lireEtat().vue).toBe('remontee');
+    expect(gestionnaire.lireEtat().peche.resultat).toBe('annulee');
+
+    // Un retour de morsure annoncé après coup est ignoré sans erreur.
+    expect(() => gestionnaire.actualiser({ tirer: false, interagir: false })).not.toThrow();
+    expect(gestionnaire.lireEtat().vue).toBe('remontee');
+  });
 });
 
 function delaiPredit(): number {

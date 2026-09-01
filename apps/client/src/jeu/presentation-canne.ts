@@ -18,6 +18,7 @@ import {
   GestionnaireCanne,
   type EtatCanne,
   type EtatVueCanne,
+  type InterfacePeche,
 } from './canne';
 import type { Vecteur3 } from './mouvement';
 
@@ -44,6 +45,7 @@ export function construirePresentationCanne(
   moteur: Engine,
   scene: Scene,
   graine: string,
+  interfacePeche: InterfacePeche,
 ): PresentationCanneBabylon {
   scene.clearColor = new Color4(0.31, 0.66, 0.82, 1);
   scene.fogMode = Scene.FOGMODE_EXP2;
@@ -93,11 +95,7 @@ export function construirePresentationCanne(
     lirePosition: () => positionDeZone(zone),
     lireHorodatage: () => 0,
     graine,
-    interfacePeche: {
-      afficherInvite: () => undefined,
-      afficherStatut: () => undefined,
-      afficherResultat: () => undefined,
-    },
+    interfacePeche,
     adaptateur: construireAdaptateurPecheCoeurJeu(monde),
   });
   const canne = construireCanneBabylon(camera, scene);

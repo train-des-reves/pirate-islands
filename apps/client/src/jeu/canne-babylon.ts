@@ -139,10 +139,17 @@ export function construireCanneBabylon(camera: FreeCamera, scene: Scene): CanneB
     fil.setEnabled(lancé);
     segmentFil.isVisible = lancé;
     flotteur.isVisible = lancé;
-    // En morsure, le flotteur plonge brièvement pour traduire la touche.
-    const plongée = etat.vue === 'morsure' ? -0.18 : 0;
-    flotteur.position.y = -0.9 + plongée;
-    segmentFil.scaling.y = etat.vue === 'morsure' ? 1.15 : 1;
+    // En remontée, la ligne est récupérée : le flotteur revient près de la
+    // canne et le fil se raccourcit, ce qui la distingue de l'attente.
+    if (etat.vue === 'remontee') {
+      flotteur.position.y = -0.45;
+      segmentFil.scaling.y = 0.5;
+      segmentFil.position.y = 0;
+    } else {
+      flotteur.position.y = (etat.vue === 'morsure' ? -1.08 : -0.9);
+      segmentFil.scaling.y = 1;
+      segmentFil.position.y = -0.45;
+    }
     racine.setEnabled(etat.vue !== 'rangee');
   };
 
