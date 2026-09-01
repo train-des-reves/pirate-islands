@@ -85,6 +85,15 @@ const HAUTEUR_REFERENCE = 720;
 const HAUTEUR_YEUX = 1.62;
 const POSITION_DEPART = { x: 0, y: 0, z: -6.5 } as const;
 
+function normaliserAngle(angle: number): number {
+  if (!Number.isFinite(angle)) {
+    return 0;
+  }
+  const deuxPi = Math.PI * 2;
+  const normalisé = ((angle + Math.PI) % deuxPi + deuxPi) % deuxPi - Math.PI;
+  return normalisé === -Math.PI ? Math.PI : normalisé;
+}
+
 const canvas = document.querySelector<HTMLCanvasElement>('#scene-canvas');
 const application = document.querySelector<HTMLElement>('#app');
 const indicateurServeur = document.querySelector<HTMLElement>('[data-testid="serveur-status"]');
@@ -1076,7 +1085,12 @@ function construireScene(): JeuClient | undefined {
     let emetteurTransformation: EmetteurTransformation | undefined;
     let retirerEtiquettesPecheurs: (() => void) | undefined;
 
-    if (modePecheursDistants) {
+    const assurerSynchronisationPecheurs = (): void => {
+      const salle = connecteurPanneau?.lireSalle();
+      if (!salle || synchroniseurPecheurs || retirerEtiquettesPecheurs) {
+        return;
+      }
+
       synchroniseurPecheurs = new SynchroniseurPecheursDistants(
         () => connecteurPanneau?.lireSalle(),
         () => connecteurPanneau?.lireSalle()?.sessionId ?? '',
@@ -1102,13 +1116,15 @@ function construireScene(): JeuClient | undefined {
         scene,
         cameraBabylon,
       ).retirer;
-    }
+    };
 
     let dernierTemps = performance.now();
     const boucle = (): void => {
       const maintenant = performance.now();
       const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
       dernierTemps = maintenant;
+
+      assurerSynchronisationPecheurs();
 
       if (verrouillageE2EForce && !enPause && !entrees.estPointeurVerrouille()) {
         entrees.simulerVerrouillage(true);
@@ -1143,12 +1159,12 @@ function construireScene(): JeuClient | undefined {
           y: joueur.position.y + HAUTEUR_YEUX,
           z: joueur.position.z,
         });
-        if (modePecheursDistants) {
+        if (emetteurTransformation) {
           const regard = camera.obtenirEtat();
           emetteurTransformation?.envoyer({
             position: joueur.position,
-            lacet: regard.lacet,
-            tangage: regard.tangage,
+            lacet: normaliserAngle(regard.lacet),
+            tangage: normaliserAngle(regard.tangage),
             roulis: 0,
           });
         }
@@ -1158,7 +1174,7 @@ function construireScene(): JeuClient | undefined {
         pistolet.actualiser(tempsTir);
       }
 
-      if (modePecheursDistants) {
+      if (synchroniseurPecheurs) {
         synchroniseurPecheurs?.mettreAJour();
         for (const pecheur of synchroniseurPecheurs?.obtenirPecheurs() ?? []) {
           pecheur.mettreAJour(deltaSecondes);

@@ -60,6 +60,7 @@ interface DerniereTransformation {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+  /** Temps serveur (Date.now()) de réception, jamais fourni par le client. */
   readonly horodatage: number;
 }
 
@@ -71,15 +72,12 @@ type ClientSalle = Client<{
 const CODE_MESSAGE_INVALIDE = 4003;
 const CODE_MESSAGE_INCONNU = 4004;
 
-function deltaTempsHorodatages(précédent: number, actuel: number): number {
-  return Math.max(0, (actuel - précédent) / 1000);
-}
-
 function vitesseManifestementImpossible(
   précédente: DerniereTransformation,
   actuelle: MessageTransformationJoueur,
 ): boolean {
-  const deltaTemps = deltaTempsHorodatages(précédente.horodatage, actuelle.horodatage);
+  const maintenant = Date.now();
+  const deltaTemps = Math.max(0, (maintenant - précédente.horodatage) / 1000);
   if (deltaTemps <= 0) {
     return false;
   }
@@ -258,7 +256,7 @@ export class SalleJeu extends Room<{
       x: actuelle.position.x,
       y: actuelle.position.y,
       z: actuelle.position.z,
-      horodatage: actuelle.horodatage,
+      horodatage: Date.now(),
     });
   }
 

@@ -355,6 +355,23 @@ describe('SalleJeu Colyseus', () => {
     sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
   });
 
+  it('rejette une transformation à valeur non finie', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    const départ = new Promise<number>((résoudre) => salle.onLeave.once(résoudre));
+
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: Number.NaN, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 1_000,
+    });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
   it('accepte une intention valide et réduit une seule cible pirate', async () => {
     const client = await ouvrirClient();
     const salle = await rejoindreSalle(client, undefined, { graine: 'graine-test' });

@@ -51,6 +51,9 @@ export class SynchroniseurPecheursDistants {
   public mettreAJour(): void {
     const salle = this.obtenirSalle();
     if (!salle) {
+      // Salle indisponible : plus d'état de référence fiable, on retire toutes les
+      // vues distantes plutôt que de conserver des avatars potentiellement périmés.
+      this.liberer();
       return;
     }
 

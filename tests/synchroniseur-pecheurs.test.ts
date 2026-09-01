@@ -103,6 +103,26 @@ describe('synchroniseur des pêcheurs distants', () => {
     synchroniseur.liberer();
   });
 
+  it('libère tous les avatars lorsque la salle devient indisponible', () => {
+    const scène = initialiserScène();
+    let salle: Room<unknown, EtatSalle> | undefined = créerSalle('session-local', [
+      ['session-local', joueur('session-local', 'Pêcheur-Local')],
+      ['session-distante', joueur('session-distante', 'Pêcheur-Distant')],
+    ]) as unknown as Room<unknown, EtatSalle>;
+    const synchroniseur = new SynchroniseurPecheursDistants(
+      () => salle,
+      () => 'session-local',
+      scène,
+    );
+    synchroniseur.mettreAJour();
+    expect(synchroniseur.obtenirPecheurs()).toHaveLength(1);
+
+    salle = undefined;
+    synchroniseur.mettreAJour();
+    expect(synchroniseur.obtenirPecheurs()).toHaveLength(0);
+    synchroniseur.liberer();
+  });
+
   it('borne l’émission à l’intervalle réseau', () => {
     let maintenant = 0;
     const salle = créerSalle('session-local', []);
