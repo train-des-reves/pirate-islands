@@ -65,6 +65,10 @@ import {
 } from './jeu/diagnostic-salle';
 import { construireHarnaisPeche } from './interface/harnais-peche.js';
 import { monterPresentationPeche } from './interface/presenter-peche.js';
+import { construireHarnaisCanne } from './interface/harnais-canne.js';
+import { monterPresentationCanne } from './interface/presenter-canne.js';
+import { construireModePeche, pistoletPeutTirer, type ModePeche } from './jeu/mode-peche.js';
+import { construirePresentationCanne } from './jeu/presentation-canne.js';
 import {
   connecterSalleJeu,
   genererNomPecheur,
@@ -106,6 +110,11 @@ const caseInversion = document.querySelector<HTMLInputElement>(
 );
 const etatInversion = document.querySelector<HTMLElement>('[data-testid="etat-inversion"]');
 const messageReglages = document.querySelector<HTMLElement>('[data-testid="reglages-message"]');
+const pecheInvite = document.querySelector<HTMLElement>('[data-testid="peche-invite"]');
+const pecheStatut = document.querySelector<HTMLElement>('[data-testid="peche-statut"]');
+const pecheInviteTexte = document.querySelector<HTMLElement>(
+  '[data-testid="peche-invite-texte"]',
+);
 const boutonReprendre = document.querySelector<HTMLButtonElement>('[data-testid="reprendre-jeu"]');
 const boutonOuvrirReglages = document.querySelector<HTMLButtonElement>(
   '[data-testid="ouvrir-reglages"]',
@@ -184,6 +193,9 @@ if (
   !caseInversion ||
   !etatInversion ||
   !messageReglages ||
+  !pecheInvite ||
+  !pecheStatut ||
+  !pecheInviteTexte ||
   !boutonReprendre ||
   !boutonOuvrirReglages ||
   !boutonAnnulerReglages ||
@@ -230,6 +242,9 @@ const indicateurPointeur = etatPointeur;
 const inputInversion = caseInversion;
 const texteInversion = etatInversion;
 const statutReglages = messageReglages;
+const invitePeche = pecheInvite;
+const statutPeche = pecheStatut;
+const texteInvitePeche = pecheInviteTexte;
 const boutonReprendreJeu = boutonReprendre;
 const boutonOuvrir = boutonOuvrirReglages;
 const boutonAnnuler = boutonAnnulerReglages;
@@ -429,6 +444,13 @@ interface EtatJeuE2E {
     readonly derniereIntention: IntentionTir | undefined;
     readonly intentions: readonly IntentionTir[];
   };
+  readonly peche: {
+    readonly modeActif: boolean;
+    readonly vue: string;
+    readonly sequence: number;
+    readonly invite: string | null;
+    readonly statut: string;
+  };
 }
 
 interface EtatPecheurE2E {
@@ -455,6 +477,8 @@ declare global {
       avancerTemps: (deltaMs: number) => void;
       lireEtatViseurIa?: () => EtatVisualiseurIa;
       afficherInstantViseurIa?: (instant: number) => void;
+      forcerEtatCanne?: (vue: string) => void;
+      lireEtatCanne?: () => { readonly modeActif: boolean; readonly vue: string };
       lireEtatPecheurs?: () => EtatHarnessPecheurs;
       /** Émet une intention de tir réseau vers le serveur (mode salle). */
       tirerReseau?: (cibleId?: string) => void;
@@ -511,10 +535,12 @@ const modeCamera: ModeCameraMonde =
     : 'ensemble';
 const présentationBateau = estModePresentationBateau(modeCamera);
 const modePresentationPeche = modeE2E && paramètres.get('presentation') === 'regles-peche';
+const modePresentationCanne = modeE2E && paramètres.get('presentation') === 'canne-peche';
 const modePanneauE2E = modeE2E && paramètres.get('panneau') === '1';
 const modeMonde =
   modeDiagnosticSalle ||
   modePresentationPeche ||
+  modePresentationCanne ||
   présentationBateau ||
   paramètres.has('graine') ||
   paramètres.has('camera');
@@ -529,6 +555,8 @@ conteneurApplication.dataset.mode = modeBateauxPirates
     ? 'pecheurs-distants'
   : modePirates
     ? 'pirates'
+  : modePresentationCanne
+    ? 'presentation'
   : modePresentationPeche
     ? 'presentation'
     : modeDiagnosticSalle
@@ -538,7 +566,13 @@ conteneurApplication.dataset.mode = modeBateauxPirates
         : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
-conteneurApplication.dataset.presentation = présentationBateau ? modeCamera : 'aucune';
+conteneurApplication.dataset.presentation = présentationBateau
+  ? modeCamera
+  : modePresentationPeche
+    ? 'regles-peche'
+    : modePresentationCanne
+      ? 'canne-peche'
+      : 'aucune';
 conteneurApplication.dataset.vue = modeBateauxPirates
   ? 'bateaux-pirates'
   : modeViseurIa
@@ -636,6 +670,7 @@ function construireScene(): JeuClient | undefined {
         collision: 'aucune',
         reglages: reglages.applique,
         tir: { compteur: 0, etat: { recul: 0, eclairBouche: false }, derniereIntention: undefined, intentions: [] },
+        peche: { modeActif: false, vue: 'rangee', sequence: 0, invite: null, statut: '' },
       }),
       lireReglages: () => reglages.applique,
       reinitialiser: () => undefined,
@@ -664,6 +699,94 @@ function construireScene(): JeuClient | undefined {
       return {
         detruire: () => {
           presentation.detruire();
+        },
+      };
+    }
+
+    if (modePresentationCanne) {
+      const moteurPresentation = new Engine(canvasJeu, true, {
+        preserveDrawingBuffer: true,
+        stencil: true,
+      });
+      const scenePresentation = new Scene(moteurPresentation);
+      const interfacePechePresentation = {
+        afficherInvite: (invite: string | null) => {
+          invitePeche.hidden = invite === null;
+          if (invite !== null) {
+            texteInvitePeche.textContent = invite;
+          }
+        },
+        afficherStatut: (statut: string) => {
+          statutPeche.hidden = false;
+          statutPeche.textContent = statut;
+        },
+        afficherResultat: () => undefined,
+      };
+      const presentationBabylon = construirePresentationCanne(
+        moteurPresentation,
+        scenePresentation,
+        graine,
+        interfacePechePresentation,
+      );
+      const harnais = construireHarnaisCanne(graine, 1);
+      const presentation = monterPresentationCanne(harnais, conteneurApplication);
+      const masquerHarness = (masque: boolean): void => {
+        presentation.conteneur.hidden = masque;
+      };
+      conteneurApplication.dataset.scene = 'ready';
+      conteneurApplication.dataset.presentation = 'canne-peche';
+      conteneurApplication.dataset.mode = 'presentation';
+
+      const bouclePresentation = (): void => {
+        scenePresentation.render();
+      };
+      moteurPresentation.runRenderLoop(bouclePresentation);
+      const redimensionnerPresentation = (): void => moteurPresentation.resize();
+      window.addEventListener('resize', redimensionnerPresentation);
+
+      window.__pirateIslandsE2E = {
+        verrouillerPointeur: () => undefined,
+        libererPointeur: () => undefined,
+        lireEtat: () => ({
+          position: { x: 0, y: 0, z: 0 },
+          camera: { lacet: 0, tangage: 0 },
+          pause: false,
+          pointeurVerrouille: false,
+          collision: 'aucune',
+          reglages: reglages.applique,
+          tir: {
+            compteur: 0,
+            etat: { recul: 0, eclairBouche: false },
+            derniereIntention: undefined,
+            intentions: [],
+          },
+          peche: {
+            modeActif: presentationBabylon.lireEtat().vue !== 'rangee',
+            vue: presentationBabylon.lireEtat().vue,
+            sequence: presentationBabylon.lireEtat().sequence,
+            invite: null,
+            statut: '',
+          },
+        }),
+        lireReglages: () => reglages.applique,
+        reinitialiser: () => presentationBabylon.forcerEtat('rangee'),
+        tirer: () => undefined,
+        avancerTemps: () => undefined,
+        forcerEtatCanne: (vue: string) => {
+          masquerHarness(true);
+          presentationBabylon.forcerEtat(vue as never);
+        },
+      };
+
+      return {
+        moteur: moteurPresentation,
+        detruire: () => {
+          window.removeEventListener('resize', redimensionnerPresentation);
+          moteurPresentation.stopRenderLoop(bouclePresentation);
+          presentationBabylon.liberer();
+          moteurPresentation.dispose();
+          presentation.detruire();
+          delete window.__pirateIslandsE2E;
         },
       };
     }
@@ -904,6 +1027,27 @@ function construireScene(): JeuClient | undefined {
       lireHorodatage: () => tempsTir,
     });
     let joueur = creerEtatJoueur(POSITION_DEPART);
+    const interfacePeche = {
+      afficherInvite: (invite: string | null) => {
+        invitePeche.hidden = invite === null;
+        if (invite !== null) {
+          texteInvitePeche.textContent = invite;
+        }
+      },
+      afficherStatut: (statut: string) => {
+        statutPeche.hidden = false;
+        statutPeche.textContent = statut;
+      },
+      afficherResultat: () => undefined,
+    };
+    const modePeche: ModePeche = construireModePeche({
+      graine,
+      lirePosition: () => joueur.position,
+      lireHorodatage: () => tempsTir,
+      camera: cameraBabylon,
+      scene,
+      interfacePeche,
+    });
     let enPause = false;
     let verrouillageE2EForce = false;
     let tempsSimulationAccumule = 0;
@@ -970,6 +1114,13 @@ function construireScene(): JeuClient | undefined {
         etat: pistolet.lireEtat(),
         derniereIntention: gestionnaireTir.lireDerniereIntention(),
         intentions: [...intentionsTir],
+      },
+      peche: {
+        modeActif: modePeche?.estModeActif() ?? false,
+        vue: modePeche?.lireEtat().vue ?? 'rangee',
+        sequence: modePeche?.lireEtat().sequence ?? 0,
+        invite: invitePeche.hidden ? null : invitePeche.textContent,
+        statut: statutPeche.hidden ? '' : statutPeche.textContent ?? '',
       },
     });
 
@@ -1139,7 +1290,19 @@ function construireScene(): JeuClient | undefined {
 
       if (!enPause && dernierEtatEntrees.pointeurVerrouille) {
         camera.regarder(dernierEtatEntrees.regardX, dernierEtatEntrees.regardY);
-        gestionnaireTir.actualiser(dernierEtatEntrees.tirer, tempsTir);
+        modePeche?.actualiser({
+          tirer: dernierEtatEntrees.tirer,
+          interagir: dernierEtatEntrees.interagir,
+        });
+        // L'exclusivité est décidée par l'état du mode, pas par le retour de
+        // `actualiser` : dès que le mode est actif, `tirer` est consommé par la
+        // canne et le pistolet ne doit jamais recevoir l'action du même cadre.
+        const modePecheActif = modePeche.estModeActif();
+        const pistoletAutorisé = pistoletPeutTirer(modePecheActif);
+        pistolet.setVisible(pistoletAutorisé);
+        if (pistoletAutorisé) {
+          gestionnaireTir.actualiser(dernierEtatEntrees.tirer, tempsTir);
+        }
         pistolet.actualiser(tempsTir);
         const résultatSimulation = simulerMouvementParPasFixes(
           joueur,
@@ -1170,6 +1333,7 @@ function construireScene(): JeuClient | undefined {
         }
       } else {
         tempsSimulationAccumule = 0;
+        modePeche?.reinitialiser();
         gestionnaireTir.actualiser(false, tempsTir);
         pistolet.actualiser(tempsTir);
       }
@@ -1200,6 +1364,7 @@ function construireScene(): JeuClient | undefined {
         entrees.detacher();
         window.removeEventListener('resize', redimensionner);
         moteur.stopRenderLoop(boucle);
+        modePeche?.liberer();
         pistolet.liberer();
         moteur.dispose();
         mettreAJourEntreesActives = undefined;
@@ -1387,6 +1552,7 @@ if (modeDiagnosticSalle) {
               derniereIntention: undefined,
               intentions: [],
             },
+            peche: { modeActif: false, vue: 'rangee', sequence: 0, invite: null, statut: '' },
           }),
           lireReglages: () => reglages.applique,
           reinitialiser: () => undefined,

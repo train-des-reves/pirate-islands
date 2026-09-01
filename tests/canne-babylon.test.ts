@@ -1,0 +1,109 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { FreeCamera, NullEngine, Scene, Vector3 } from 'babylonjs';
+
+import { genererMonde } from '@pirate/coeur-jeu';
+
+import { construireCanneBabylon } from '../apps/client/src/jeu/canne-babylon';
+import { construireModePeche } from '../apps/client/src/jeu/mode-peche';
+
+describe('canne procédurale Babylon', () => {
+  let moteur: NullEngine | undefined;
+  let scène: Scene | undefined;
+
+  afterEach(() => {
+    scène?.dispose();
+    moteur?.dispose();
+    scène = undefined;
+    moteur = undefined;
+  });
+
+  function creerScène(): { scene: Scene; camera: FreeCamera } {
+    moteur = new NullEngine({
+      deterministicLockstep: false,
+      lockstepMaxSteps: 4,
+      renderWidth: 1280,
+      renderHeight: 720,
+      textureSize: 512,
+    });
+    scène = new Scene(moteur);
+    const camera = new FreeCamera('camera-canne-test', new Vector3(0, 1.62, 0), scène);
+    scène.activeCamera = camera;
+    return { scene: scène, camera };
+  }
+
+  it('crée et libère deux fois sans doublon, avec noms uniques et fil non vide', () => {
+    const { scene, camera } = creerScène();
+    const premiere = construireCanneBabylon(camera, scene);
+
+    expect(scene.getMeshByName('canne-corps')?.parent?.name).toBe('canne-premiere-personne');
+    expect(scene.getMeshByName('canne-fil')).toBeDefined();
+    expect(scene.getMeshByName('canne-fil')?.isVisible).toBe(false);
+    expect(scene.getMeshByName('canne-flotteur')).toBeDefined();
+    expect(premiere.meshes.length).toBeGreaterThan(0);
+    expect(new Set(premiere.meshes.map((mesh) => mesh.name)).size).toBe(premiere.meshes.length);
+    // Toutes les transformations sont finies (jamais NaN/Infinity).
+    for (const mesh of premiere.meshes) {
+      expect(Number.isFinite(mesh.position.x)).toBe(true);
+      expect(Number.isFinite(mesh.position.y)).toBe(true);
+      expect(Number.isFinite(mesh.position.z)).toBe(true);
+      expect(Number.isFinite(mesh.scaling.x)).toBe(true);
+    }
+    // Le fil n'est pas vide : sa géométrie expose bien un maillage non nul.
+    const fil = scene.getMeshByName('canne-fil');
+    expect(fil?.getTotalVertices()).toBeGreaterThan(0);
+
+    premiere.afficherEtat({ vue: 'lancee', sequence: 1, peche: { phase: 'attente', sequence: 1, lanceAuMs: 0, tempsCourantMs: 0 } });
+    expect(scene.getMeshByName('canne-fil')?.isVisible).toBe(true);
+    expect(scene.getMeshByName('canne-flotteur')?.isVisible).toBe(true);
+
+    premiere.liberer();
+    premiere.liberer();
+    expect(scene.getMeshByName('canne-corps')).toBeNull();
+
+    const seconde = construireCanneBabylon(camera, scene);
+    expect(seconde.meshes.some((mesh) => mesh.name === 'canne-corps-2')).toBe(false);
+    expect(seconde.racine.name).toBe('canne-premiere-personne');
+    seconde.liberer();
+    expect(scene.meshes.some((mesh) => mesh.name.startsWith('canne-'))).toBe(false);
+  });
+
+  it('masque totalement la canne quand elle est rangée', () => {
+    const { scene, camera } = creerScène();
+    const canne = construireCanneBabylon(camera, scene);
+    expect(scene.getMeshByName('canne-corps')?.isEnabled()).toBe(false);
+    canne.afficherEtat({ vue: 'prete', sequence: 0, peche: { phase: 'inactive', sequence: 0, lanceAuMs: 0, tempsCourantMs: 0 } });
+    expect(scene.getMeshByName('canne-corps')?.isEnabled()).toBe(true);
+    canne.liberer();
+  });
+
+  it('réinitialise le mode pêche via le chemin réel de pause/perte de focus', () => {
+    const { scene, camera } = creerScène();
+    const zone = genererMonde('peche-mvp-v1').zonesPeche[0];
+    if (!zone) {
+      throw new Error('Le monde doit exposer une zone de pêche.');
+    }
+    const modePeche = construireModePeche({
+      graine: 'peche-mvp-v1',
+      lirePosition: () => ({ x: zone.centre.x, y: zone.centre.y, z: zone.centre.z }),
+      lireHorodatage: () => 1_000,
+      camera,
+      scene,
+      interfacePeche: {
+        afficherInvite: () => undefined,
+        afficherStatut: () => undefined,
+        afficherResultat: () => undefined,
+      },
+    });
+    // Entre en mode pêche : la canne apparaît.
+    modePeche.actualiser({ tirer: false, interagir: true });
+    expect(modePeche.estModeActif()).toBe(true);
+    expect(scene.getMeshByName('canne-corps')?.isEnabled()).toBe(true);
+
+    // Pause / perte de focus : main.ts appelle modePeche.reinitialiser().
+    modePeche.reinitialiser();
+    expect(modePeche.estModeActif()).toBe(false);
+    expect(modePeche.lireEtat().vue).toBe('rangee');
+    expect(scene.getMeshByName('canne-corps')?.isEnabled()).toBe(false);
+    modePeche.liberer();
+  });
+});
