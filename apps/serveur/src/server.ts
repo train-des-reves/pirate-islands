@@ -6,13 +6,20 @@ import type { Request, Response } from 'express';
 
 import { creerReponseSante, NOM_SALLE_JEU } from '@pirate/protocole';
 
-import { SalleJeu, définirModeE2EServeur } from './salles/salle-jeu.js';
+import {
+  creerHorlogeSimulation,
+  SalleJeu,
+  définirModeE2EServeur,
+  type HorlogeSimulation,
+} from './salles/salle-jeu.js';
 
 export interface OptionsServeur {
   readonly host?: string;
   readonly port?: number;
   /** Active le mannequin de dégâts E2E réservé aux tests. */
   readonly modeE2E?: boolean;
+  /** Horloge de salle injectable pour les tests déterministes. */
+  readonly horloge?: HorlogeSimulation;
 }
 
 export interface ServeurDemarre {
@@ -29,6 +36,7 @@ export async function démarrerServeur(options: OptionsServeur = {}): Promise<Se
   const port = options.port ?? Number.parseInt(process.env.SERVER_PORT ?? '2567', 10);
   const modeE2E = options.modeE2E ?? process.env.SERVER_E2E === '1';
   définirModeE2EServeur(modeE2E);
+  const horloge = options.horloge ?? creerHorlogeSimulation();
   const http = createServer();
   const transport = new WebSocketTransport({ server: http });
   const colyseus = new ServeurColyseus({
@@ -48,7 +56,13 @@ export async function démarrerServeur(options: OptionsServeur = {}): Promise<Se
     transport,
   });
 
-  colyseus.define(NOM_SALLE_JEU, SalleJeu);
+  class SalleJeuConfiguree extends SalleJeu {
+    override onCreate(optionsSalle: unknown): void {
+      this.configurerHorloge(horloge);
+      super.onCreate(optionsSalle);
+    }
+  }
+  colyseus.define(NOM_SALLE_JEU, SalleJeuConfiguree);
 
   await colyseus.listen(port, host);
 

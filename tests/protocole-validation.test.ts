@@ -9,9 +9,12 @@ import {
   estMessageIntentionTirValide,
   estMessagePingValide,
   estOptionsConnexionValides,
+  validerMessageAnnulerPeche,
   validerMessageDegatsE2E,
   validerMessageIntentionTir,
+  validerMessageLancerPeche,
   validerMessagePing,
+  validerMessageReleverPeche,
   validerOptionsConnexion,
 } from '@pirate/protocole';
 
@@ -68,11 +71,12 @@ describe('validation runtime du protocole', () => {
 
   it('rejette une intention de tir avec séquence invalide ou rejouée', () => {
     expect(validerMessageIntentionTir({ ...intentionValide(), sequence: 0 }).valide).toBe(false);
+    expect(validerMessageIntentionTir({ ...intentionValide(), sequence: Number.NaN }).valide).toBe(
+      false,
+    );
     expect(
-      validerMessageIntentionTir({ ...intentionValide(), sequence: Number.NaN }).valide,
-    ).toBe(false);
-    expect(
-      validerMessageIntentionTir({ ...intentionValide(), sequence: LIMITE_SEQUENCE_TIR + 1 }).valide,
+      validerMessageIntentionTir({ ...intentionValide(), sequence: LIMITE_SEQUENCE_TIR + 1 })
+        .valide,
     ).toBe(false);
   });
 
@@ -81,7 +85,8 @@ describe('validation runtime du protocole', () => {
       validerMessageIntentionTir({ ...intentionValide(), origineX: LIMITE_ORIGINE_ABS + 1 }).valide,
     ).toBe(false);
     expect(
-      validerMessageIntentionTir({ ...intentionValide(), origineX: Number.POSITIVE_INFINITY }).valide,
+      validerMessageIntentionTir({ ...intentionValide(), origineX: Number.POSITIVE_INFINITY })
+        .valide,
     ).toBe(false);
     expect(
       validerMessageIntentionTir({
@@ -120,5 +125,45 @@ describe('validation runtime du protocole', () => {
     expect(validerMessageDegatsE2E({ degats: Number.NaN }).valide).toBe(false);
     expect(validerMessageDegatsE2E({ degats: 25, sante: 100 }).valide).toBe(false);
     expect(validerMessageDegatsE2E({}).valide).toBe(false);
+  });
+
+  it('valide les commandes de pêche sans identité ni horloge fournie par le client', () => {
+    const lancer = {
+      sequence: 1,
+      zoneId: 'zone-rivage-ile-aube',
+      origineX: 0,
+      origineY: 1.62,
+      origineZ: 0,
+      directionX: 0,
+      directionY: 0,
+      directionZ: 1,
+      flotteurX: 1,
+      flotteurY: 0,
+      flotteurZ: 1,
+    };
+    expect(validerMessageLancerPeche(lancer).valide).toBe(true);
+    expect(validerMessageReleverPeche({ sequence: 1 }).valide).toBe(true);
+    expect(validerMessageAnnulerPeche({ sequence: 1 }).valide).toBe(true);
+  });
+
+  it('refuse les champs inconnus, les directions non normalisées et les nombres non finis', () => {
+    const lancer = {
+      sequence: 1,
+      zoneId: 'zone-rivage-ile-aube',
+      origineX: 0,
+      origineY: 1.62,
+      origineZ: 0,
+      directionX: 0,
+      directionY: 0,
+      directionZ: 1,
+      flotteurX: 1,
+      flotteurY: 0,
+      flotteurZ: 1,
+    };
+    expect(validerMessageLancerPeche({ ...lancer, sessionId: 'usurpée' }).valide).toBe(false);
+    expect(validerMessageLancerPeche({ ...lancer, directionZ: 2 }).valide).toBe(false);
+    expect(validerMessageLancerPeche({ ...lancer, flotteurX: Number.NaN }).valide).toBe(false);
+    expect(validerMessageReleverPeche({ sequence: Number.POSITIVE_INFINITY }).valide).toBe(false);
+    expect(validerMessageAnnulerPeche({ sequence: 0 }).valide).toBe(false);
   });
 });

@@ -1,7 +1,11 @@
 import type {
+  MessageAnnulerPeche,
   MessageDegatsE2E,
   MessageIntentionTir,
+  MessageLancerPeche,
   MessagePing,
+  MessagePreparerPecheE2E,
+  MessageReleverPeche,
   MessageTransformationJoueur,
 } from './messages.js';
 import { SANTE_JOUEUR_MAXIMALE } from './schemas.js';
@@ -14,6 +18,10 @@ export const POSITION_MAXIMALE = 10_000;
 export const VITESSE_MAXIMALE_JOUEUR = 20;
 export const LIMITE_ORIGINE_ABS = 1_000_000;
 export const LIMITE_SEQUENCE_TIR = 1_000_000;
+export const LIMITE_SEQUENCE_PECHE = 1_000_000;
+export const TAILLE_MAX_ZONE_PECHE = 128;
+export const LIMITE_FLOTTEUR_ABS = 10_000;
+export const TOLERANCE_DIRECTION_NORMALISEE = 0.001;
 
 export interface OptionsConnexion {
   readonly graine?: string;
@@ -117,9 +125,7 @@ function estNombreBorné(valeur: unknown, maximum: number): valeur is number {
 
 function estAngleBorné(valeur: unknown): valeur is number {
   return (
-    typeof valeur === 'number' &&
-    Number.isFinite(valeur) &&
-    Math.abs(valeur) <= Math.PI * 2 + 0.001
+    typeof valeur === 'number' && Number.isFinite(valeur) && Math.abs(valeur) <= Math.PI * 2 + 0.001
   );
 }
 
@@ -161,7 +167,11 @@ export function validerMessageTransformationJoueur(
     return resultatErreur('La position de la transformation de joueur est invalide.');
   }
 
-  if (!estAngleBorné(valeur.lacet) || !estAngleBorné(valeur.tangage) || !estAngleBorné(valeur.roulis)) {
+  if (
+    !estAngleBorné(valeur.lacet) ||
+    !estAngleBorné(valeur.tangage) ||
+    !estAngleBorné(valeur.roulis)
+  ) {
     return resultatErreur('Les angles de la transformation de joueur sont invalides.');
   }
 
@@ -172,7 +182,9 @@ export function validerMessageTransformationJoueur(
     valeur.horodatage < 0 ||
     valeur.horodatage > LIMITE_HORODATAGE
   ) {
-    return resultatErreur('L’horodatage de la transformation de joueur est invalide ou trop grand.');
+    return resultatErreur(
+      'L’horodatage de la transformation de joueur est invalide ou trop grand.',
+    );
   }
 
   const position = valeur.position as MessageTransformationJoueur['position'];
@@ -195,11 +207,7 @@ export function estMessageTransformationJoueurValide(
 }
 
 function estNombreFiniBorne(valeur: unknown, borneAbsolue: number): valeur is number {
-  return (
-    typeof valeur === 'number' &&
-    Number.isFinite(valeur) &&
-    Math.abs(valeur) <= borneAbsolue
-  );
+  return typeof valeur === 'number' && Number.isFinite(valeur) && Math.abs(valeur) <= borneAbsolue;
 }
 
 /** Valide une intention de tir côté serveur, indépendamment du gameplay. */
@@ -261,11 +269,7 @@ export function validerMessageIntentionTir(
     return resultatErreur('La direction de l’intention de tir est invalide.');
   }
 
-  const longueurDirection = Math.hypot(
-    valeur.directionX,
-    valeur.directionY,
-    valeur.directionZ,
-  );
+  const longueurDirection = Math.hypot(valeur.directionX, valeur.directionY, valeur.directionZ);
   if (!(longueurDirection > Number.EPSILON)) {
     return resultatErreur('La direction de l’intention de tir est nulle.');
   }
@@ -294,10 +298,160 @@ export function validerMessageIntentionTir(
   };
 }
 
-export function estMessageIntentionTirValide(
-  valeur: unknown,
-): valeur is MessageIntentionTir {
+export function estMessageIntentionTirValide(valeur: unknown): valeur is MessageIntentionTir {
   return validerMessageIntentionTir(valeur).valide;
+}
+
+function estSequencePeche(valeur: unknown): valeur is number {
+  return (
+    typeof valeur === 'number' &&
+    Number.isSafeInteger(valeur) &&
+    valeur >= 1 &&
+    valeur <= LIMITE_SEQUENCE_PECHE
+  );
+}
+
+function estVecteurNormalise(x: unknown, y: unknown, z: unknown): boolean {
+  if (
+    !estNombreFiniBorne(x, LIMITE_ORIGINE_ABS) ||
+    !estNombreFiniBorne(y, LIMITE_ORIGINE_ABS) ||
+    !estNombreFiniBorne(z, LIMITE_ORIGINE_ABS)
+  ) {
+    return false;
+  }
+  const longueur = Math.hypot(x, y, z);
+  return longueur > Number.EPSILON && Math.abs(longueur - 1) <= TOLERANCE_DIRECTION_NORMALISEE;
+}
+
+function estZonePeche(valeur: unknown): valeur is string {
+  return estChaineBorne(valeur, TAILLE_MAX_ZONE_PECHE);
+}
+
+function estPointFlotteur(valeur: unknown): valeur is number {
+  return estNombreFiniBorne(valeur, LIMITE_FLOTTEUR_ABS);
+}
+
+export function validerMessageLancerPeche(valeur: unknown): ResultatValidation<MessageLancerPeche> {
+  const clefs = [
+    'sequence',
+    'zoneId',
+    'origineX',
+    'origineY',
+    'origineZ',
+    'directionX',
+    'directionY',
+    'directionZ',
+    'flotteurX',
+    'flotteurY',
+    'flotteurZ',
+  ] as const;
+  if (!estObjetSimple(valeur) || !possedeUniquement(valeur, clefs)) {
+    return resultatErreur('Le lancer de pêche contient des champs invalides ou inconnus.');
+  }
+  for (const clef of clefs) {
+    if (!(clef in valeur)) {
+      return resultatErreur('Le lancer de pêche doit contenir ' + clef + '.');
+    }
+  }
+  if (!estSequencePeche(valeur.sequence)) {
+    return resultatErreur('La séquence de pêche est invalide.');
+  }
+  if (!estZonePeche(valeur.zoneId)) {
+    return resultatErreur('La zone de pêche est invalide ou trop longue.');
+  }
+  if (
+    !estNombreFiniBorne(valeur.origineX, LIMITE_ORIGINE_ABS) ||
+    !estNombreFiniBorne(valeur.origineY, LIMITE_ORIGINE_ABS) ||
+    !estNombreFiniBorne(valeur.origineZ, LIMITE_ORIGINE_ABS)
+  ) {
+    return resultatErreur('L’origine de pêche est invalide.');
+  }
+  if (!estVecteurNormalise(valeur.directionX, valeur.directionY, valeur.directionZ)) {
+    return resultatErreur('La direction de pêche doit être normalisée et finie.');
+  }
+  if (
+    !estPointFlotteur(valeur.flotteurX) ||
+    !estPointFlotteur(valeur.flotteurY) ||
+    !estPointFlotteur(valeur.flotteurZ)
+  ) {
+    return resultatErreur('La position du flotteur est invalide.');
+  }
+  return {
+    valide: true,
+    valeur: {
+      sequence: valeur.sequence,
+      zoneId: valeur.zoneId,
+      origineX: valeur.origineX,
+      origineY: valeur.origineY,
+      origineZ: valeur.origineZ,
+      directionX: valeur.directionX as number,
+      directionY: valeur.directionY as number,
+      directionZ: valeur.directionZ as number,
+      flotteurX: valeur.flotteurX,
+      flotteurY: valeur.flotteurY,
+      flotteurZ: valeur.flotteurZ,
+    },
+  };
+}
+
+export function estMessageLancerPecheValide(valeur: unknown): valeur is MessageLancerPeche {
+  return validerMessageLancerPeche(valeur).valide;
+}
+
+function validerCommandePeche(
+  valeur: unknown,
+  nom: string,
+): ResultatValidation<{ readonly sequence: number }> {
+  if (
+    !estObjetSimple(valeur) ||
+    !possedeUniquement(valeur, ['sequence']) ||
+    !('sequence' in valeur)
+  ) {
+    return resultatErreur(`La commande ${nom} doit contenir uniquement sequence.`);
+  }
+  if (!estSequencePeche(valeur.sequence)) {
+    return resultatErreur(`La séquence de la commande ${nom} est invalide.`);
+  }
+  return { valide: true, valeur: { sequence: valeur.sequence } };
+}
+
+export function validerMessageReleverPeche(
+  valeur: unknown,
+): ResultatValidation<MessageReleverPeche> {
+  return validerCommandePeche(valeur, 'relevé');
+}
+
+export function estMessageReleverPecheValide(valeur: unknown): valeur is MessageReleverPeche {
+  return validerMessageReleverPeche(valeur).valide;
+}
+
+export function validerMessageAnnulerPeche(
+  valeur: unknown,
+): ResultatValidation<MessageAnnulerPeche> {
+  return validerCommandePeche(valeur, 'annulation');
+}
+
+export function estMessageAnnulerPecheValide(valeur: unknown): valeur is MessageAnnulerPeche {
+  return validerMessageAnnulerPeche(valeur).valide;
+}
+
+export function validerMessagePreparerPecheE2E(
+  valeur: unknown,
+): ResultatValidation<MessagePreparerPecheE2E> {
+  if (
+    !estObjetSimple(valeur) ||
+    !possedeUniquement(valeur, ['preparation']) ||
+    valeur.preparation !== true
+  ) {
+    return resultatErreur('La préparation E2E de pêche est invalide.');
+  }
+  return { valide: true, valeur: { preparation: true } };
+}
+
+export function estMessagePreparerPecheE2EValide(
+  valeur: unknown,
+): valeur is MessagePreparerPecheE2E {
+  return validerMessagePreparerPecheE2E(valeur).valide;
 }
 
 /** Valide la forme d'un message E2E de dégâts, réservé au mode de test. */
