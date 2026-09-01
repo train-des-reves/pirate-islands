@@ -77,6 +77,31 @@ async function attendreNombreJoueurs(
   });
 }
 
+async function attendreCondition(
+  salle: Room<unknown, EtatSalle>,
+  prédicat: () => boolean,
+  message: string,
+): Promise<void> {
+  if (prédicat()) {
+    return;
+  }
+  await new Promise<void>((résoudre, rejeter) => {
+    const délai = setTimeout(() => {
+      salle.onStateChange.remove(observer);
+      rejeter(new Error('Délai dépassé : ' + message));
+    }, 5_000);
+    const observer = (): void => {
+      if (!prédicat()) {
+        return;
+      }
+      clearTimeout(délai);
+      salle.onStateChange.remove(observer);
+      résoudre();
+    };
+    salle.onStateChange(observer);
+  });
+}
+
 async function attendrePirates(
   salle: Room<unknown, EtatSalle>,
   nombre: number,
@@ -280,6 +305,81 @@ describe('SalleJeu Colyseus', () => {
     sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
   });
 
+  it('synchronise la transformation du joueur émetteur uniquement', async () => {
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient);
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId);
+
+    await attendreNombreJoueurs(premièreSalle, 2);
+    await attendreNombreJoueurs(secondeSalle, 2);
+
+    // Le second joueur apparaît à (3, 0, 0). On envoie une position proche de
+    // son apparition après un court délai : le serveur autorise le déplacement
+    // dès que la vitesse restante est plausible.
+    await new Promise((résoudre) => setTimeout(résoudre, 150));
+    secondeSalle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: 3, y: 0, z: 0.4 },
+      lacet: 1.5,
+      tangage: -0.5,
+      roulis: 0.25,
+      horodatage: 0,
+    });
+
+    await attendreCondition(
+      premièreSalle,
+      () =>
+        Math.abs(
+          (premièreSalle.state.joueurs.get(secondeSalle.sessionId)?.transformation.z ?? 0) - 0.4,
+        ) < 0.001,
+      'la transformation du second joueur n’a pas été synchronisée',
+    );
+
+    const joueurLocal = premièreSalle.state.joueurs.get(premièreSalle.sessionId);
+    const joueurSecond = premièreSalle.state.joueurs.get(secondeSalle.sessionId);
+    expect(joueurSecond?.transformation.x).toBe(3);
+    expect(joueurSecond?.transformation.y).toBe(0);
+    expect(joueurSecond?.transformation.z).toBeCloseTo(0.4);
+    expect(joueurSecond?.transformation.lacet).toBeCloseTo(1.5);
+    // Le joueur local (premier) reste sur son apparition (-3, 0, 0).
+    expect(joueurLocal?.transformation.x).toBe(-3);
+  });
+
+  it('rejette une transformation contenant un champ sessionId usurpé', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    const départ = new Promise<number>((résoudre) => salle.onLeave.once(résoudre));
+
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      sessionId: 'session-usurpée',
+      position: { x: 42, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 1_000,
+    });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
+  it('rejette une transformation à valeur non finie', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    const départ = new Promise<number>((résoudre) => salle.onLeave.once(résoudre));
+
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: Number.NaN, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 1_000,
+    });
+
+    await expect(départ).resolves.toBe(4003);
+    sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
   it('accepte une intention valide et réduit une seule cible pirate', async () => {
     const client = await ouvrirClient();
     const salle = await rejoindreSalle(client, undefined, { graine: 'graine-test' });
@@ -315,6 +415,84 @@ describe('SalleJeu Colyseus', () => {
 
     await expect(départ).resolves.toBe(4003);
     sallesOuvertes.splice(sallesOuvertes.indexOf(salle), 1);
+  });
+
+  it('ignore une transformation à vitesse manifestement impossible', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    const sessionId = salle.sessionId;
+
+    // Le joueur apparaît à (-3, 0, 0). La référence de vitesse est initialisée
+    // sur cette apparition, donc même le premier paquet est borné : une
+    // téléportation très lointaine est manifestement impossible et ignorée,
+    // quelle que soit la latence (la vitesse resterait colossale).
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: 1_000, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 0,
+    });
+
+    await new Promise((résoudre) => setTimeout(résoudre, 300));
+    // La position reste celle de l'apparition : le téléport du premier paquet
+    // a bien été rejeté, la référence de vitesse étant initialisée à l'apparition.
+    expect(salle.state.joueurs.get(sessionId)?.transformation.x).toBe(-3);
+  });
+
+  it('ignore un déplacement instantané envoyé dans la même milliseconde', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    const sessionId = salle.sessionId;
+
+    // Position plausible proche de l'apparition (-3, 0, 0).
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: -2.9, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 0,
+    });
+    // Le second message repart immédiatement : le delta de temps est nul, donc
+    // un déplacement non nul est manifestement impossible et doit être rejeté.
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: 1_000, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 0,
+    });
+
+    await new Promise((résoudre) => setTimeout(résoudre, 300));
+    expect(salle.state.joueurs.get(sessionId)?.transformation.x).not.toBe(1_000);
+  });
+
+  it('ignore la transformation d’un joueur mort sans le déconnecter', async () => {
+    serveurModeE2E = true;
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client);
+    await attendreNombreJoueurs(salle, 1);
+    const sessionId = salle.sessionId;
+
+    salle.send(NOMS_MESSAGES.degatsE2E, { degats: SANTE_JOUEUR_MAXIMALE });
+    await expect
+      .poll(() => salle.state.joueurs.get(sessionId)?.vivant, { timeout: 2_000 })
+      .toBe(false);
+
+    const positionAvant = salle.state.joueurs.get(sessionId)?.transformation.x;
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: { x: 3, y: 0, z: 0 },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: 0,
+    });
+
+    await new Promise((résoudre) => setTimeout(résoudre, 300));
+    // Le joueur mort ne peut pas modifier l'état autoritaire, sans être déconnecté.
+    expect(salle.state.joueurs.get(sessionId)?.transformation.x).toBe(positionAvant);
+    expect(salle.state.joueurs.get(sessionId)?.vivant).toBe(false);
+    serveurModeE2E = false;
   });
 
   it('rejette une séquence d’intention rejouée', async () => {

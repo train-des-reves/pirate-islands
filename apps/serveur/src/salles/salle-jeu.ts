@@ -9,10 +9,6 @@ import {
   creerJoueur,
   creerPirate,
   obtenirPointApparition,
-  validerMessageDegatsE2E,
-  validerMessageIntentionTir,
-  validerMessagePing,
-  validerOptionsConnexion,
   type EtatSalle,
   type Joueur,
   type MessageDegatsE2E,
@@ -20,7 +16,14 @@ import {
   type MessagePing,
   type MessagePong,
   type MessageResultatTir,
+  type MessageTransformationJoueur,
   type MetadonneesSalleMatchmaking,
+  validerMessageDegatsE2E,
+  validerMessageIntentionTir,
+  validerMessagePing,
+  validerMessageTransformationJoueur,
+  validerOptionsConnexion,
+  VITESSE_MAXIMALE_JOUEUR,
 } from '@pirate/protocole';
 import {
   DELAI_REAPPARITION_JOUEUR_MS,
@@ -39,6 +42,7 @@ import { Room, type AuthContext, type Client } from '@colyseus/core';
 interface MessagesSalle {
   [NOMS_MESSAGES.ping]: MessagePing;
   [NOMS_MESSAGES.pong]: MessagePong;
+  [NOMS_MESSAGES.transformationJoueur]: MessageTransformationJoueur;
   [NOMS_MESSAGES.intentionTir]: MessageIntentionTir;
   [NOMS_MESSAGES.resultatTir]: MessageResultatTir;
   [NOMS_MESSAGES.degatsE2E]: MessageDegatsE2E;
@@ -52,6 +56,14 @@ interface DonneesClientSalle {
   readonly prochaineReapparitionMs: number;
 }
 
+interface DerniereTransformation {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /** Temps serveur (Date.now()) de réception, jamais fourni par le client. */
+  readonly horodatage: number;
+}
+
 type ClientSalle = Client<{
   messages: MessagesSalle;
   userData: DonneesClientSalle;
@@ -59,6 +71,28 @@ type ClientSalle = Client<{
 
 const CODE_MESSAGE_INVALIDE = 4003;
 const CODE_MESSAGE_INCONNU = 4004;
+
+function vitesseManifestementImpossible(
+  précédente: DerniereTransformation,
+  actuelle: MessageTransformationJoueur,
+): boolean {
+  const distance = Math.hypot(
+    actuelle.position.x - précédente.x,
+    actuelle.position.y - précédente.y,
+    actuelle.position.z - précédente.z,
+  );
+  // Un déplacement sans temps écoulé (delta nul, ou horodatage futur) est
+  // manifestement impossible dès que la position change. Sinon le client
+  // pourrait téléporter son joueur en envoyant deux messages dans la même
+  // milliseconde.
+  const deltaTemps = (Date.now() - précédente.horodatage) / 1000;
+  if (deltaTemps <= 0) {
+    return distance > 0;
+  }
+
+  const vitesse = distance / deltaTemps;
+  return vitesse > VITESSE_MAXIMALE_JOUEUR;
+}
 
 let modeE2EServeurActif = false;
 
@@ -75,6 +109,7 @@ export class SalleJeu extends Room<{
   override maxClients = CAPACITE_SALLE;
 
   private prochainIndexApparition = 0;
+  private readonly dernièresTransformations = new Map<string, DerniereTransformation>();
   private monde: ReturnType<typeof genererMonde> = genererMonde();
   private modeE2E = false;
 
@@ -141,11 +176,22 @@ export class SalleJeu extends Room<{
     this.state.joueurs.set(client.sessionId, joueur);
     this.state.bateaux.set(bateau.identifiant, bateau);
     this.state.phase = PHASE_SALLE_PARTIE;
+
+    // La référence de vitesse est initialisée sur la transformation d'apparition
+    // serveur avec l'horodatage serveur : le premier paquet client ne peut pas
+    // téléporter le joueur vers une position arbitraire.
+    this.dernièresTransformations.set(client.sessionId, {
+      x: joueur.transformation.x,
+      y: joueur.transformation.y,
+      z: joueur.transformation.z,
+      horodatage: Date.now(),
+    });
   }
 
   override onLeave(client: ClientSalle): void {
     this.state.joueurs.delete(client.sessionId);
     this.state.bateaux.delete('bateau-' + client.sessionId);
+    this.dernièresTransformations.delete(client.sessionId);
 
     if (this.state.joueurs.size === 0) {
       this.state.phase = PHASE_SALLE_ATTENTE;
@@ -173,6 +219,11 @@ export class SalleJeu extends Room<{
       return;
     }
 
+    if (type === NOMS_MESSAGES.transformationJoueur) {
+      this.traiterTransformation(client, message);
+      return;
+    }
+
     if (type === NOMS_MESSAGES.intentionTir) {
       this.traiterIntentionTir(client, message);
       return;
@@ -184,6 +235,49 @@ export class SalleJeu extends Room<{
     }
 
     this.rejeterMessage(client, CODE_MESSAGE_INCONNU, 'Le message demandé est inconnu.');
+  }
+
+  private traiterTransformation(client: ClientSalle, message: unknown): void {
+    const validation = validerMessageTransformationJoueur(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+
+    const joueur = this.state.joueurs.get(client.sessionId);
+    if (!joueur) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'La session n’est pas dans la salle.');
+      return;
+    }
+
+    // Un joueur mort ne peut pas modifier la transformation autoritaire : la
+    // référence est conservée telle quelle jusqu'à la réapparition. On ignore
+    // silencieusement sans déconnecter, comme pour une vitesse impossible.
+    if (!joueur.vivant) {
+      return;
+    }
+
+    const actuelle = validation.valeur;
+    const précédente = this.dernièresTransformations.get(client.sessionId);
+    if (précédente && vitesseManifestementImpossible(précédente, actuelle)) {
+      // Valeur invalide (vitesse manifestement impossible) : ignorée sans sanction,
+      // conformément au contrat autoritaire et sans déconnecter un client honnête.
+      return;
+    }
+
+    joueur.transformation.x = actuelle.position.x;
+    joueur.transformation.y = actuelle.position.y;
+    joueur.transformation.z = actuelle.position.z;
+    joueur.transformation.lacet = actuelle.lacet;
+    joueur.transformation.tangage = actuelle.tangage;
+    joueur.transformation.roulis = actuelle.roulis;
+
+    this.dernièresTransformations.set(client.sessionId, {
+      x: actuelle.position.x,
+      y: actuelle.position.y,
+      z: actuelle.position.z,
+      horodatage: Date.now(),
+    });
   }
 
   private traiterPing(client: ClientSalle, message: unknown): void {
@@ -228,10 +322,7 @@ export class SalleJeu extends Room<{
       y: joueur.transformation.y,
       z: joueur.transformation.z,
     };
-    const reapparitionImminente = reapparitionDue(
-      maintenant,
-      données.prochaineReapparitionMs,
-    );
+    const reapparitionImminente = reapparitionDue(maintenant, données.prochaineReapparitionMs);
 
     this.appliquerReapparitionSiDue(client, joueur, maintenant, données);
     données = client.userData ?? données;
@@ -434,6 +525,14 @@ export class SalleJeu extends Room<{
       dernierTirMs: 0,
       prochaineReapparitionMs: 0,
     };
+    // La référence de vitesse est réinitialisée sur la nouvelle apparition : le
+    // joueur réapparu ne peut pas exploiter sa position antérieure.
+    this.dernièresTransformations.set(client.sessionId, {
+      x: pointApparition.x,
+      y: pointApparition.y,
+      z: pointApparition.z,
+      horodatage: Date.now(),
+    });
   }
 
   private rejeterMessage(client: ClientSalle, code: number, raison: string): void {

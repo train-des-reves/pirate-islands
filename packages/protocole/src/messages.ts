@@ -3,6 +3,7 @@ export const NOM_SALLE_JEU = 'jeu';
 export const NOMS_MESSAGES = Object.freeze({
   ping: 'salle:ping',
   pong: 'salle:pong',
+  transformationJoueur: 'joueur:transformation',
   intentionTir: 'jeu:intention-tir',
   resultatTir: 'jeu:resultat-tir',
   degatsE2E: 'jeu:e2e-degats',
@@ -15,6 +16,20 @@ export interface MessagePing {
 }
 
 export interface MessagePong {
+  readonly horodatage: number;
+}
+
+export interface PositionJoueur {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+export interface MessageTransformationJoueur {
+  readonly position: PositionJoueur;
+  readonly lacet: number;
+  readonly tangage: number;
+  readonly roulis: number;
   readonly horodatage: number;
 }
 
