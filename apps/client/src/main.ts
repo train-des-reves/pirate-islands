@@ -522,6 +522,7 @@ declare global {
       lireDeconnexion?: () => number | undefined;
       /** Prépare le joueur dans la première zone, uniquement pour le harnais E2E. */
       preparerPecheE2E?: () => void;
+      avancerPecheE2E?: () => void;
       lancerPeche?: () => void;
       releverPeche?: () => void;
       annulerPeche?: () => void;
@@ -1604,6 +1605,7 @@ if (modeDiagnosticSalle) {
           lireCombat: connexion.lireCombat,
           lireDeconnexion: connexion.lireDeconnexion,
           preparerPecheE2E: connexion.preparerPecheE2E,
+          avancerPecheE2E: connexion.avancerPecheE2E,
           lancerPeche: connexion.lancerPeche,
           releverPeche: connexion.releverPeche,
           annulerPeche: connexion.annulerPeche,

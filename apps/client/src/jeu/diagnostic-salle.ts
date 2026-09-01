@@ -12,7 +12,7 @@ import {
   type MessageResultatTir,
   type OptionsConnexion,
 } from '@pirate/protocole';
-import { genererMonde, normaliserDirection } from '@pirate/coeur-jeu';
+import { calculerPrevisionPeche, genererMonde, normaliserDirection } from '@pirate/coeur-jeu';
 
 export interface ElementsDiagnosticSalle {
   readonly conteneur: HTMLElement;
@@ -73,6 +73,7 @@ export interface DiagnosticSalleConnecte {
   /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
   readonly lireDeconnexion: () => number | undefined;
   readonly preparerPecheE2E: () => void;
+  readonly avancerPecheE2E: () => void;
   readonly lancerPeche: () => void;
   readonly releverPeche: () => void;
   readonly annulerPeche: () => void;
@@ -368,6 +369,17 @@ export async function connecterDiagnosticSalle(
         salleTypée.send(NOMS_MESSAGES.preparerPecheE2E, { preparation: true });
       }
     },
+    avancerPecheE2E: () => {
+      if (détruite) {
+        return;
+      }
+      const ligne = salleTypée.state.lignesPeche.get(salleTypée.sessionId);
+      const délai = ligne
+        ? calculerPrevisionPeche(salleTypée.state.metadonnees.graine, ligne.sequence)
+            .delaiMorsureMs
+        : 0;
+      salleTypée.send(NOMS_MESSAGES.avancerPecheE2E, { deltaMs: délai + 200 });
+    },
     lancerPeche: () => {
       if (détruite) {
         return;
@@ -387,8 +399,8 @@ export async function connecterDiagnosticSalle(
         y: zone.centre.y - origine.y,
         z: zone.centre.z - origine.z,
       });
-      // La séquence E2E est choisie avec un délai de morsure suffisamment
-      // large pour laisser le harnais capturer les deux fenêtres navigateur.
+      // La séquence E2E choisit un délai de morsure suffisamment large pour
+      // laisser le harnais capturer les deux fenêtres navigateur.
       const sequencePeche = Math.max(sequence, 5);
       salleTypée.send(NOMS_MESSAGES.lancerPeche, {
         sequence: sequencePeche,

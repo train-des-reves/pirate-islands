@@ -1,5 +1,6 @@
 import type {
   MessageAnnulerPeche,
+  MessageAvancerPecheE2E,
   MessageDegatsE2E,
   MessageIntentionTir,
   MessageLancerPeche,
@@ -452,6 +453,30 @@ export function estMessagePreparerPecheE2EValide(
   valeur: unknown,
 ): valeur is MessagePreparerPecheE2E {
   return validerMessagePreparerPecheE2E(valeur).valide;
+}
+
+/** Valide l’avance d’horloge réservée au harnais E2E. */
+export function validerMessageAvancerPecheE2E(
+  valeur: unknown,
+): ResultatValidation<MessageAvancerPecheE2E> {
+  if (!estObjetSimple(valeur) || !possedeUniquement(valeur, ['deltaMs'])) {
+    return resultatErreur('Le message E2E d’avance doit contenir uniquement deltaMs.');
+  }
+  if (
+    typeof valeur.deltaMs !== 'number' ||
+    !Number.isFinite(valeur.deltaMs) ||
+    valeur.deltaMs < 0 ||
+    valeur.deltaMs > 60_000
+  ) {
+    return resultatErreur('L’avance d’horloge E2E est invalide.');
+  }
+  return { valide: true, valeur: { deltaMs: valeur.deltaMs } };
+}
+
+export function estMessageAvancerPecheE2EValide(
+  valeur: unknown,
+): valeur is MessageAvancerPecheE2E {
+  return validerMessageAvancerPecheE2E(valeur).valide;
 }
 
 /** Valide la forme d'un message E2E de dégâts, réservé au mode de test. */

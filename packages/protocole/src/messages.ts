@@ -11,6 +11,7 @@ export const NOMS_MESSAGES = Object.freeze({
   annulerPeche: 'jeu:peche-annuler',
   resultatPeche: 'jeu:peche-resultat',
   preparerPecheE2E: 'jeu:e2e-preparer-peche',
+  avancerPecheE2E: 'jeu:e2e-avancer-peche',
   degatsE2E: 'jeu:e2e-degats',
 } as const);
 
@@ -99,6 +100,11 @@ export interface MessageResultatPeche {
 /** Commande réservée au harnais E2E : le serveur choisit lui-même la zone. */
 export interface MessagePreparerPecheE2E {
   readonly preparation: true;
+}
+
+/** Message E2E réservé au mode de test : avance l’horloge de pêche. */
+export interface MessageAvancerPecheE2E {
+  readonly deltaMs: number;
 }
 
 /** Message E2E réservé au mode de test : inflige des dégâts à un joueur. */

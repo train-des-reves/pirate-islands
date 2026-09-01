@@ -9,6 +9,7 @@ type EtatPecheE2E = {
 type CrochetPeche = {
   lirePeche?: () => EtatPecheE2E;
   preparerPecheE2E?: () => void;
+  avancerPecheE2E?: () => void;
   lancerPeche?: () => void;
   releverPeche?: () => void;
   quitterSalleE2E?: () => void;
@@ -145,19 +146,17 @@ test('montre la ligne autoritaire à deux clients et le refus français', async 
       writeFile('docs/preuves/peche-autoritaire-1280x720.png', contenuComposite),
     );
 
-    await pageA.waitForFunction(
-      () => {
-        const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPeche })
-          .__pirateIslandsE2E;
-        if (crochet?.lirePeche?.().ligneLocale?.phase !== 'morsure') {
-          return false;
-        }
-        crochet.releverPeche?.();
-        return true;
-      },
-      undefined,
-      { polling: 50, timeout: 10_000 },
-    );
+    await pageA.evaluate(() => {
+      const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPeche })
+        .__pirateIslandsE2E;
+      crochet?.avancerPecheE2E?.();
+    });
+    await attendrePeche(pageA, (état) => état.ligneLocale?.phase === 'morsure');
+    await pageA.evaluate(() => {
+      const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPeche })
+        .__pirateIslandsE2E;
+      crochet?.releverPeche?.();
+    });
     await attendrePeche(pageA, (état) => état.dernierResultat?.resultat === 'prise');
     await attendrePeche(pageA, (état) => état.lignesActives === 0);
     await pageA.evaluate(() => {

@@ -11,6 +11,7 @@ import {
   LignePecheSchema,
   obtenirPointApparition,
   type MessageAnnulerPeche,
+  type MessageAvancerPecheE2E,
   type EtatSalle,
   type Joueur,
   type MessageDegatsE2E,
@@ -25,6 +26,7 @@ import {
   type MessageTransformationJoueur,
   type MetadonneesSalleMatchmaking,
   validerMessageAnnulerPeche,
+  validerMessageAvancerPecheE2E,
   validerMessageDegatsE2E,
   validerMessageIntentionTir,
   validerMessageLancerPeche,
@@ -70,6 +72,7 @@ interface MessagesSalle {
   [NOMS_MESSAGES.annulerPeche]: MessageAnnulerPeche;
   [NOMS_MESSAGES.resultatPeche]: MessageResultatPeche;
   [NOMS_MESSAGES.preparerPecheE2E]: MessagePreparerPecheE2E;
+  [NOMS_MESSAGES.avancerPecheE2E]: MessageAvancerPecheE2E;
   [NOMS_MESSAGES.degatsE2E]: MessageDegatsE2E;
 }
 
@@ -196,7 +199,7 @@ export class SalleJeu extends Room<{
     this.monde = genererMonde(this.state.metadonnees.graine);
     this.peuplerPirates();
     this.setSimulationInterval((deltaMs) => {
-      if (this.horloge.automatique) {
+      if (this.horloge.automatique && !this.modeE2E) {
         this.horloge.avancerMs(deltaMs);
       }
       this.actualiserPeches();
@@ -315,6 +318,11 @@ export class SalleJeu extends Room<{
 
     if (type === NOMS_MESSAGES.preparerPecheE2E) {
       this.traiterPreparerPecheE2E(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.avancerPecheE2E) {
+      this.traiterAvancerPecheE2E(client, message);
       return;
     }
 
@@ -779,6 +787,20 @@ export class SalleJeu extends Room<{
       z: zone.centre.z,
       horodatage: Date.now(),
     });
+  }
+
+  private traiterAvancerPecheE2E(client: ClientSalle, message: unknown): void {
+    if (!this.modeE2E) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le message est réservé au mode E2E.');
+      return;
+    }
+    const validation = validerMessageAvancerPecheE2E(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+    this.horloge.avancerMs(validation.valeur.deltaMs);
+    this.actualiserPeches();
   }
 
   private actualiserPeches(): void {

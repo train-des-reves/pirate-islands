@@ -10,6 +10,7 @@ import {
   estMessagePingValide,
   estOptionsConnexionValides,
   validerMessageAnnulerPeche,
+  validerMessageAvancerPecheE2E,
   validerMessageDegatsE2E,
   validerMessageIntentionTir,
   validerMessageLancerPeche,
@@ -165,5 +166,8 @@ describe('validation runtime du protocole', () => {
     expect(validerMessageLancerPeche({ ...lancer, flotteurX: Number.NaN }).valide).toBe(false);
     expect(validerMessageReleverPeche({ sequence: Number.POSITIVE_INFINITY }).valide).toBe(false);
     expect(validerMessageAnnulerPeche({ sequence: 0 }).valide).toBe(false);
+    expect(validerMessageAvancerPecheE2E({ deltaMs: 3_000 }).valide).toBe(true);
+    expect(validerMessageAvancerPecheE2E({ deltaMs: Number.POSITIVE_INFINITY }).valide).toBe(false);
+    expect(validerMessageAvancerPecheE2E({ deltaMs: 3_000, sequence: 1 }).valide).toBe(false);
   });
 });
