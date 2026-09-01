@@ -12,6 +12,11 @@ import {
   type OptionsConnexion,
 } from '@pirate/protocole';
 import { normaliserDirection } from '@pirate/coeur-jeu';
+import {
+  afficherAthCombat,
+  construireEtatAthCombat,
+  type ElementsAthCombat,
+} from '../interface/ath-combat';
 
 export interface ElementsDiagnosticSalle {
   readonly conteneur: HTMLElement;
@@ -25,6 +30,7 @@ export interface ElementsDiagnosticSalle {
   readonly reapparition: HTMLElement;
   readonly resultat: HTMLElement;
   readonly deconnexion: HTMLElement;
+  readonly athCombat?: ElementsAthCombat;
 }
 
 /** État de combat exposé au harnais E2E, jamais fourni au serveur. */
@@ -71,11 +77,13 @@ interface EtatCombatInterne {
 function écrireDiagnosticCombat(
   elements: ElementsDiagnosticSalle,
   etat: EtatCombatInterne,
+  salle: Room<unknown, EtatSalle>,
 ): void {
   elements.cible.textContent = 'Cible : ' + (etat.cibleId ?? 'aucune');
   elements.santeJoueur.textContent = 'Santé joueur : ' + etat.santeJoueur;
   elements.santePirate.textContent = 'Santé pirate : ' + etat.santePirate;
-  elements.reapparition.textContent = 'En attente : ' + (etat.enAttenteReapparition ? 'oui' : 'non');
+  elements.reapparition.textContent =
+    'En attente : ' + (etat.enAttenteReapparition ? 'oui' : 'non');
   elements.deconnexion.textContent =
     etat.codeDeconnexion === undefined
       ? 'Rejet serveur : aucun'
@@ -88,6 +96,17 @@ function écrireDiagnosticCombat(
     const neutralise = dernier.pirateNeutralise ? ' · neutralisé' : '';
     elements.resultat.textContent =
       'Dernier tir : cible ' + cible + ' · dégâts ' + dernier.degats + neutralise;
+  }
+
+  if (elements.athCombat !== undefined) {
+    const joueur = lireJoueurLocal(salle);
+    if (joueur !== undefined) {
+      const cible = etat.cibleId ? salle.state.pirates.get(etat.cibleId) : undefined;
+      afficherAthCombat(
+        elements.athCombat,
+        construireEtatAthCombat(joueur, cible, etat.dernierResultat),
+      );
+    }
   }
 }
 
@@ -107,7 +126,10 @@ function lireJoueurLocal(salle: Room<unknown, EtatSalle>): Joueur | undefined {
 function calculerViseeDeterministe(
   salle: Room<unknown, EtatSalle>,
   cibleId?: string,
-): { readonly origine: { readonly x: number; readonly y: number; readonly z: number }; readonly direction: { readonly x: number; readonly y: number; readonly z: number } } {
+): {
+  readonly origine: { readonly x: number; readonly y: number; readonly z: number };
+  readonly direction: { readonly x: number; readonly y: number; readonly z: number };
+} {
   const joueur = lireJoueurLocal(salle);
   const position = {
     x: joueur?.transformation.x ?? 0,
@@ -194,19 +216,16 @@ export async function connecterDiagnosticSalle(
       santePirate: cible?.sante ?? etatCombat.santePirate,
       pirateNeutralise: cible !== undefined && !cible.vivant,
     };
-    écrireDiagnosticCombat(elements, etatCombat);
+    écrireDiagnosticCombat(elements, etatCombat, salle);
   };
 
-  salleTypée.onMessage(
-    NOMS_MESSAGES.resultatTir,
-    (message: MessageResultatTir) => {
-      etatCombat.dernierResultat = message;
-      etatCombat.cibleId = message.cibleId;
-      etatCombat.degats = message.degats;
-      etatCombat.pirateNeutralise = message.pirateNeutralise;
-      mettreAJourDiagnostic();
-    },
-  );
+  salleTypée.onMessage(NOMS_MESSAGES.resultatTir, (message: MessageResultatTir) => {
+    etatCombat.dernierResultat = message;
+    etatCombat.cibleId = message.cibleId;
+    etatCombat.degats = message.degats;
+    etatCombat.pirateNeutralise = message.pirateNeutralise;
+    mettreAJourDiagnostic();
+  });
 
   salleTypée.onError((code) => {
     dernierCodeDeconnexion = code;
@@ -222,15 +241,18 @@ export async function connecterDiagnosticSalle(
   salleTypée.onStateChange(() => mettreAJourDiagnostic());
   mettreAJourDiagnostic();
 
-  const émettreIntention = (origine: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  }, direction: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  }): MessageIntentionTir => {
+  const émettreIntention = (
+    origine: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    },
+    direction: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    },
+  ): MessageIntentionTir => {
     const intention: MessageIntentionTir = {
       sequence,
       origineX: origine.x,
