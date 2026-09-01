@@ -7,6 +7,7 @@ import {
   debarquer,
   extraireAncres,
   interagir,
+  majInvite,
   simulerPilotage,
   type EtatPilotageComplet,
   type MondePilotage,
@@ -91,16 +92,21 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
     options.surEtat?.(lireEtat());
   };
 
-  const agir = (): void => {
-    etat = interagir(etat, ancres, options.descripteur);
+  const majInviteEtNotifier = (): void => {
+    etat = majInvite(etat, ancres);
     notifier();
+  };
+
+  const agir = (): void => {
+    etat = interagir(etat, ancres);
+    majInviteEtNotifier();
   };
 
   const debarquerExplicite = (): void => {
     if (etat.mode === 'bord') {
-      etat = debarquer(etat, ancres, options.descripteur);
+      etat = debarquer(etat, ancres);
       intentionsActuelles = INTENTIONS_AUCUNE;
-      notifier();
+      majInviteEtNotifier();
     }
   };
 
@@ -125,7 +131,7 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
         z: positionMondeFromLocal(etat, positionLocale).z,
       }),
     };
-    notifier();
+    majInviteEtNotifier();
   };
 
   const piloter = (intentions: IntentionsPilotage): void => {
@@ -149,7 +155,7 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
       intentionsActuelles = calculerIntentionsDepuisActions(actions);
     }
     etat = simulerPilotage(etat, actions, 0, delta, monde, contraintes);
-    notifier();
+    majInviteEtNotifier();
   };
 
   const avancerTemps = (deltaSecondes: number): void => {
@@ -162,7 +168,7 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
     boucle(actions, deltaSecondes);
   };
 
-  notifier();
+  majInviteEtNotifier();
 
   return {
     lireEtat,
@@ -179,7 +185,7 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
         options.positionBateauInitiale,
       );
       intentionsActuelles = INTENTIONS_AUCUNE;
-      notifier();
+      majInviteEtNotifier();
     },
   };
 }

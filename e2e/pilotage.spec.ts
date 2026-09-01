@@ -18,8 +18,6 @@ type CrochetPilotage = {
     readonly pilotage?: EtatPilotageE2E;
   };
   reinitialiser: () => void;
-  agir: () => void;
-  debarquer: () => void;
   deplacerBord: (offset: { x: number; y?: number; z: number }) => void;
   piloter: (intentions: { poussee: number; gouvernail: number }) => void;
   avancerTemps: (deltaMs: number) => void;
@@ -46,20 +44,10 @@ async function lireEtat(page: Page): Promise<EtatPilotageE2E | undefined> {
   });
 }
 
-async function agir(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPilotage })
-      .__pirateIslandsE2E;
-    crochet?.agir();
-  });
-}
-
-async function debarquer(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPilotage })
-      .__pirateIslandsE2E;
-    crochet?.debarquer();
-  });
+async function attendreMode(page: Page, mode: string): Promise<void> {
+  await expect
+    .poll(async () => (await lireEtat(page))?.mode, { timeout: 5_000 })
+    .toBe(mode);
 }
 
 async function deplacerBord(
@@ -111,15 +99,15 @@ test('embarque, prend la barre, navigue, heurte le rivage, sort de barre et déb
   expect(etatInitial?.mode).toBe('pied');
 
   // Embauque (interagir).
-  await agir(page);
-  const aBord = await lireEtat(page);
-  expect(aBord?.mode).toBe('bord');
+  await page.keyboard.press('KeyE');
+  await attendreMode(page, 'bord');
 
   // Marche à bord jusqu'à la barre (position locale z ≈ 1,65).
   await deplacerBord(page, { x: 0, z: 7.3 });
 
   // Prend la barre (interagir près de la barre).
-  await agir(page);
+  await page.keyboard.press('KeyE');
+  await attendreMode(page, 'pilote');
   const aLaBarre = await lireEtat(page);
   expect(aLaBarre?.mode).toBe('pilote');
   expect(aLaBarre?.invite).toBe('prendre_barre');
@@ -168,7 +156,8 @@ test('embarque, prend la barre, navigue, heurte le rivage, sort de barre et déb
   expect(apresVirage?.rotationBateau).not.toBe(aLaBarre?.rotationBateau);
 
   // Sort de la barre (interagir).
-  await agir(page);
+  await page.keyboard.press('KeyE');
+  await attendreMode(page, 'bord');
   const sortiBarre = await lireEtat(page);
   expect(sortiBarre?.mode).toBe('bord');
   await page.screenshot({
@@ -189,7 +178,6 @@ test('embarque, prend la barre, navigue, heurte le rivage, sort de barre et déb
 
   // Marche à bord jusqu'à la sortie puis débarque (interagir).
   await deplacerBord(page, { x: 0, z: 1.5 });
-  await debarquer(page);
-  const debarque = await lireEtat(page);
-  expect(debarque?.mode).toBe('pied');
+  await page.keyboard.press('KeyE');
+  await attendreMode(page, 'pied');
 });

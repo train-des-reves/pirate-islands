@@ -62,7 +62,22 @@ export function extraireAncres(descripteur: DescripteurBateau): AncragesPilotage
   if (!embarquement || !barre) {
     throw new Error('Le bateau doit exposer les ancres d’embarquement et de barre.');
   }
-  return { embarquement: { ...embarquement.position }, barre: { ...barre.position } };
+  // Les ancres du descripteur sont en coordonnées monde : on les reconvertit
+  // en coordonnées locales au bateau. Les comparaisons et conversions se font
+  // ensuite dans la pose courante du bateau (position + rotationY), ce qui
+  // reste valide après navigation.
+  return {
+    embarquement: {
+      ...positionMondeVersLocale(
+        embarquement.position,
+        descripteur.position,
+        descripteur.rotationY,
+      ),
+    },
+    barre: {
+      ...positionMondeVersLocale(barre.position, descripteur.position, descripteur.rotationY),
+    },
+  };
 }
 
 export function creerEtatPilotageComplet(
@@ -70,22 +85,23 @@ export function creerEtatPilotageComplet(
   descripteur: DescripteurBateau,
   positionBateau?: { readonly x: number; readonly y: number; readonly z: number },
 ): EtatPilotageComplet {
+  const bateau = creerEtatNavigationBateau(
+    positionBateau
+      ? { x: positionBateau.x, y: positionBateau.y, z: positionBateau.z }
+      : { x: descripteur.position.x, y: descripteur.position.y, z: descripteur.position.z },
+    descripteur.rotationY,
+  );
   const positionLocale = positionMondeVersLocale(
     { x: positionMonde.x, y: positionMonde.y, z: positionMonde.z },
-    descripteur.position,
-    descripteur.rotationY,
+    bateau.position,
+    bateau.rotationY,
   );
   return {
     mode: 'pied',
     invite: 'aucune',
     passager: creerEtatJoueur({ x: positionMonde.x, y: positionMonde.y, z: positionMonde.z }),
     positionLocale,
-    bateau: creerEtatNavigationBateau(
-      positionBateau
-        ? { x: positionBateau.x, y: positionBateau.y, z: positionBateau.z }
-        : { x: descripteur.position.x, y: descripteur.position.y, z: descripteur.position.z },
-      descripteur.rotationY,
-    ),
+    bateau,
   };
 }
 
@@ -95,7 +111,12 @@ export function majInvite(
   ancres: AncragesPilotage,
 ): EtatPilotageComplet {
   const liste = ancresPourInvite(ancres);
-  const invite = determinerInvite(etat.mode, etat.passager.position, liste);
+  const positionLocale = positionMondeVersLocale(
+    etat.passager.position,
+    etat.bateau.position,
+    etat.bateau.rotationY,
+  );
+  const invite = determinerInvite(etat.mode, positionLocale, liste);
   return { ...etat, invite };
 }
 
@@ -106,20 +127,19 @@ export function majInvite(
 export function interagir(
   etat: EtatPilotageComplet,
   ancres: AncragesPilotage,
-  descripteur: DescripteurBateau,
 ): EtatPilotageComplet {
   if (etat.mode === 'pilote') {
-    return quitterBarre(etat, ancres, descripteur);
+    return quitterBarre(etat, ancres);
   }
   const invite = majInvite(etat, ancres).invite;
   if (invite === 'embarquer') {
-    return embarquer(etat, ancres, descripteur);
+    return embarquer(etat, ancres);
   }
   if (invite === 'prendre_barre') {
-    return prendreBarre(etat, ancres, descripteur);
+    return prendreBarre(etat, ancres);
   }
   if (invite === 'debarcher') {
-    return debarquer(etat, ancres, descripteur);
+    return debarquer(etat, ancres);
   }
   return etat;
 }
@@ -128,13 +148,8 @@ export function interagir(
 export function embarquer(
   etat: EtatPilotageComplet,
   ancres: AncragesPilotage,
-  descripteur: DescripteurBateau,
 ): EtatPilotageComplet {
-  const positionLocale = positionMondeVersLocale(
-    { x: ancres.embarquement.x, y: ancres.embarquement.y, z: ancres.embarquement.z },
-    descripteur.position,
-    descripteur.rotationY,
-  );
+  const positionLocale = { ...ancres.embarquement };
   const positionMonde = positionLocaleVersMonde(
     positionLocale,
     etat.bateau.position,
@@ -153,13 +168,8 @@ export function embarquer(
 export function prendreBarre(
   etat: EtatPilotageComplet,
   ancres: AncragesPilotage,
-  descripteur: DescripteurBateau,
 ): EtatPilotageComplet {
-  const local = positionMondeVersLocale(
-    { x: ancres.barre.x, y: ancres.barre.y, z: ancres.barre.z },
-    descripteur.position,
-    descripteur.rotationY,
-  );
+  const local = { ...ancres.barre };
   const monde = positionLocaleVersMonde(
     { x: local.x, y: local.y, z: local.z },
     etat.bateau.position,
@@ -178,13 +188,8 @@ export function prendreBarre(
 export function quitterBarre(
   etat: EtatPilotageComplet,
   ancres: AncragesPilotage,
-  descripteur: DescripteurBateau,
 ): EtatPilotageComplet {
-  const local = positionMondeVersLocale(
-    { x: ancres.barre.x, y: ancres.barre.y, z: ancres.barre.z },
-    descripteur.position,
-    descripteur.rotationY,
-  );
+  const local = { ...ancres.barre };
   const monde = positionLocaleVersMonde(
     { x: local.x, y: local.y, z: local.z },
     etat.bateau.position,
@@ -203,13 +208,8 @@ export function quitterBarre(
 export function debarquer(
   etat: EtatPilotageComplet,
   ancres: AncragesPilotage,
-  descripteur: DescripteurBateau,
 ): EtatPilotageComplet {
-  const localEmb = positionMondeVersLocale(
-    { x: ancres.embarquement.x, y: ancres.embarquement.y, z: ancres.embarquement.z },
-    descripteur.position,
-    descripteur.rotationY,
-  );
+  const localEmb = { ...ancres.embarquement };
   const directionSortie = localEmb.z < 0 ? -1 : 1;
   const localDehors = {
     x: localEmb.x,

@@ -806,42 +806,44 @@ function construireScene(): JeuClient | undefined {
       });
       entreesPilotage.attacher();
 
-      window.__pirateIslandsE2E = {
-        verrouillerPointeur: () => undefined,
-        libererPointeur: () => undefined,
-        lireEtat: () => {
-          const etat = harnais.lireEtat();
-          return {
-            position: etat.positionJoueur,
-            camera: { lacet: 0, tangage: 0 },
-            pause: false,
-            pointeurVerrouille: false,
-            collision: 'aucune' as const,
-            reglages: clonerReglagesPourLecture(reglages.applique),
-            tir: {
-              compteur: 0,
-              etat: { recul: 0, eclairBouche: false },
-              derniereIntention: undefined,
-              intentions: [],
-            },
-            pilotage: etat as unknown as NonNullable<EtatJeuE2E['pilotage']>,
-          };
-        },
-        lireReglages: () => clonerReglagesPourLecture(reglages.applique),
-        reinitialiser: () => harnais.reinitialiser(),
-        agir: () => harnais.agir(),
-        piloter: (intentions) => harnais.piloter(intentions),
-        tirer: () => undefined,
-        avancerTemps: (deltaMs) =>
-          harnais.avancerTemps((Number.isFinite(deltaMs) ? deltaMs : 0) / 1000),
-      };
-      (window.__pirateIslandsE2E as { debarquer?: () => void }).debarquer = () =>
-        harnais.debarquer();
-      (
-        window.__pirateIslandsE2E as {
-          deplacerBord?: (o: { x: number; y?: number; z: number }) => void;
-        }
-      ).deplacerBord = (offset) => harnais.deplacerBord(offset);
+      if (modeE2E) {
+        window.__pirateIslandsE2E = {
+          verrouillerPointeur: () => undefined,
+          libererPointeur: () => undefined,
+          lireEtat: () => {
+            const etat = harnais.lireEtat();
+            return {
+              position: etat.positionJoueur,
+              camera: { lacet: 0, tangage: 0 },
+              pause: false,
+              pointeurVerrouille: false,
+              collision: 'aucune' as const,
+              reglages: clonerReglagesPourLecture(reglages.applique),
+              tir: {
+                compteur: 0,
+                etat: { recul: 0, eclairBouche: false },
+                derniereIntention: undefined,
+                intentions: [],
+              },
+              pilotage: etat as unknown as NonNullable<EtatJeuE2E['pilotage']>,
+            };
+          },
+          lireReglages: () => clonerReglagesPourLecture(reglages.applique),
+          reinitialiser: () => harnais.reinitialiser(),
+          agir: () => harnais.agir(),
+          piloter: (intentions) => harnais.piloter(intentions),
+          tirer: () => undefined,
+          avancerTemps: (deltaMs) =>
+            harnais.avancerTemps((Number.isFinite(deltaMs) ? deltaMs : 0) / 1000),
+        };
+        (window.__pirateIslandsE2E as { debarquer?: () => void }).debarquer = () =>
+          harnais.debarquer();
+        (
+          window.__pirateIslandsE2E as {
+            deplacerBord?: (o: { x: number; y?: number; z: number }) => void;
+          }
+        ).deplacerBord = (offset) => harnais.deplacerBord(offset);
+      }
 
       scene.executeWhenReady(() => {
         conteneurApplication.dataset.bateau = mondeBabylon.bateau.descripteur.id;
@@ -860,11 +862,16 @@ function construireScene(): JeuClient | undefined {
         invite.mettreAJour(suivant);
       });
       const boucle = (): void => {
+        const actions = entreesPilotage.lireEtat();
+        const transitions = entreesPilotage.lireTransitions();
+        // « interagir » est une action transitoire : on ne déclenche la
+        // transition qu'au front montant, jamais en maintenant la touche.
+        // En mode E2E, la simulation reste pilotée par `avancerTemps` ; seule
+        // l'interaction issue des vraies touches est traitée ici.
+        if (transitions.appuyees.includes('interagir')) {
+          harnais.agir();
+        }
         if (!modeE2E) {
-          const actions = entreesPilotage.lireEtat();
-          if (actions.interagir) {
-            harnais.agir();
-          }
           harnais.boucle(
             {
               avancer: actions.avancer,
@@ -905,7 +912,9 @@ function construireScene(): JeuClient | undefined {
           controle.liberer();
           mondeBabylon.liberer();
           moteur.dispose();
-          delete window.__pirateIslandsE2E;
+          if (modeE2E) {
+            delete window.__pirateIslandsE2E;
+          }
         },
       };
     }
