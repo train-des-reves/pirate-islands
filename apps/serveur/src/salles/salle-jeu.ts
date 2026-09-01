@@ -76,17 +76,20 @@ function vitesseManifestementImpossible(
   précédente: DerniereTransformation,
   actuelle: MessageTransformationJoueur,
 ): boolean {
-  const maintenant = Date.now();
-  const deltaTemps = Math.max(0, (maintenant - précédente.horodatage) / 1000);
-  if (deltaTemps <= 0) {
-    return false;
-  }
-
   const distance = Math.hypot(
     actuelle.position.x - précédente.x,
     actuelle.position.y - précédente.y,
     actuelle.position.z - précédente.z,
   );
+  // Un déplacement sans temps écoulé (delta nul, ou horodatage futur) est
+  // manifestement impossible dès que la position change. Sinon le client
+  // pourrait téléporter son joueur en envoyant deux messages dans la même
+  // milliseconde.
+  const deltaTemps = (Date.now() - précédente.horodatage) / 1000;
+  if (deltaTemps <= 0) {
+    return distance > 0;
+  }
+
   const vitesse = distance / deltaTemps;
   return vitesse > VITESSE_MAXIMALE_JOUEUR;
 }
@@ -173,6 +176,16 @@ export class SalleJeu extends Room<{
     this.state.joueurs.set(client.sessionId, joueur);
     this.state.bateaux.set(bateau.identifiant, bateau);
     this.state.phase = PHASE_SALLE_PARTIE;
+
+    // La référence de vitesse est initialisée sur la transformation d'apparition
+    // serveur avec l'horodatage serveur : le premier paquet client ne peut pas
+    // téléporter le joueur vers une position arbitraire.
+    this.dernièresTransformations.set(client.sessionId, {
+      x: joueur.transformation.x,
+      y: joueur.transformation.y,
+      z: joueur.transformation.z,
+      horodatage: Date.now(),
+    });
   }
 
   override onLeave(client: ClientSalle): void {
@@ -234,6 +247,13 @@ export class SalleJeu extends Room<{
     const joueur = this.state.joueurs.get(client.sessionId);
     if (!joueur) {
       this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'La session n’est pas dans la salle.');
+      return;
+    }
+
+    // Un joueur mort ne peut pas modifier la transformation autoritaire : la
+    // référence est conservée telle quelle jusqu'à la réapparition. On ignore
+    // silencieusement sans déconnecter, comme pour une vitesse impossible.
+    if (!joueur.vivant) {
       return;
     }
 
@@ -302,10 +322,7 @@ export class SalleJeu extends Room<{
       y: joueur.transformation.y,
       z: joueur.transformation.z,
     };
-    const reapparitionImminente = reapparitionDue(
-      maintenant,
-      données.prochaineReapparitionMs,
-    );
+    const reapparitionImminente = reapparitionDue(maintenant, données.prochaineReapparitionMs);
 
     this.appliquerReapparitionSiDue(client, joueur, maintenant, données);
     données = client.userData ?? données;
@@ -508,6 +525,14 @@ export class SalleJeu extends Room<{
       dernierTirMs: 0,
       prochaineReapparitionMs: 0,
     };
+    // La référence de vitesse est réinitialisée sur la nouvelle apparition : le
+    // joueur réapparu ne peut pas exploiter sa position antérieure.
+    this.dernièresTransformations.set(client.sessionId, {
+      x: pointApparition.x,
+      y: pointApparition.y,
+      z: pointApparition.z,
+      horodatage: Date.now(),
+    });
   }
 
   private rejeterMessage(client: ClientSalle, code: number, raison: string): void {
