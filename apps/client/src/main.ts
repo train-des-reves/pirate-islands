@@ -423,7 +423,7 @@ declare global {
       avancerTemps: (deltaMs: number) => void;
       agir?: () => void;
       debarquer?: () => void;
-      deplacerBord?: (offset: { x: number; z: number }) => void;
+      deplacerBord?: (offset: { x: number; y?: number; z: number }) => void;
       piloter?: (intentions: { poussee: number; gouvernail: number }) => void;
       lireEtatViseurIa?: () => EtatVisualiseurIa;
       afficherInstantViseurIa?: (instant: number) => void;
@@ -449,7 +449,7 @@ const modeViseurIa = modeE2E && paramètres.get('vue') === 'ia';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
-const modePilotage = modeE2E && paramètres.get('pilotage') === '1';
+const modePilotage = paramètres.get('pilotage') === '1';
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const cameraDemandée = paramètres.get('camera');
 const modeCamera: ModeCameraMonde =
@@ -791,6 +791,21 @@ function construireScene(): JeuClient | undefined {
       camera.position.set(positionBateau.x, positionBateau.y + 4.5, positionBateau.z - 12);
       camera.setTarget(new Vector3(positionBateau.x, positionBateau.y + 1.4, positionBateau.z));
 
+      const entreesPilotage = new GestionnaireEntrees({
+        cible: window,
+        document: window.document,
+        elementVerrouillage: canvasJeu,
+        liaisons: construireLiaisonsEntrees(reglages.applique),
+        onChangementVerrouillage: () => undefined,
+        onPause: () => {
+          // Échap quitte la barre et rend les contrôles à pied.
+          if (harnais.lireEtat().mode === 'pilote') {
+            harnais.agir();
+          }
+        },
+      });
+      entreesPilotage.attacher();
+
       window.__pirateIslandsE2E = {
         verrouillerPointeur: () => undefined,
         libererPointeur: () => undefined,
@@ -823,7 +838,9 @@ function construireScene(): JeuClient | undefined {
       (window.__pirateIslandsE2E as { debarquer?: () => void }).debarquer = () =>
         harnais.debarquer();
       (
-        window.__pirateIslandsE2E as { deplacerBord?: (o: { x: number; z: number }) => void }
+        window.__pirateIslandsE2E as {
+          deplacerBord?: (o: { x: number; y?: number; z: number }) => void;
+        }
       ).deplacerBord = (offset) => harnais.deplacerBord(offset);
 
       scene.executeWhenReady(() => {
@@ -843,7 +860,34 @@ function construireScene(): JeuClient | undefined {
         invite.mettreAJour(suivant);
       });
       const boucle = (): void => {
-        harnais.avancerTemps(0.016);
+        if (!modeE2E) {
+          const actions = entreesPilotage.lireEtat();
+          if (actions.interagir) {
+            harnais.agir();
+          }
+          harnais.boucle(
+            {
+              avancer: actions.avancer,
+              reculer: actions.reculer,
+              gauche: actions.gauche,
+              droite: actions.droite,
+            },
+            0.016,
+          );
+        }
+        // La caméra suit le passager du bateau pour rendre la marée et la
+        // cale visibles : derrière lui selon le lacet de la caméra.
+        const etat = harnais.lireEtat();
+        const position = etat.positionJoueur;
+        const lacet = mondeBabylon.camera.rotation.y;
+        const distance = 3.4;
+        const hauteur = 2.1;
+        mondeBabylon.camera.position.set(
+          position.x - Math.sin(lacet) * distance,
+          position.y + hauteur,
+          position.z - Math.cos(lacet) * distance,
+        );
+        mondeBabylon.camera.setTarget(new Vector3(position.x, position.y + 0.4, position.z));
         scene.render();
       };
       moteur.runRenderLoop(boucle);
@@ -853,6 +897,7 @@ function construireScene(): JeuClient | undefined {
       return {
         moteur,
         detruire: () => {
+          entreesPilotage.detacher();
           window.removeEventListener('resize', redimensionner);
           scene.onAfterRenderObservable.remove(observer);
           moteur.stopRenderLoop(boucle);

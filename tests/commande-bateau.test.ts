@@ -6,6 +6,7 @@ import {
   debarquer,
   embarquer,
   extraireAncres,
+  interagir,
   majInvite,
   prendreBarre,
   quitterBarre,
@@ -35,9 +36,35 @@ describe('commande du bateau de pêche', () => {
     expect(etat.mode).toBe('bord');
 
     // Après avoir quitté la barre, le joueur est toujours près de la barre,
-    // donc loin de l'ancre d'embarquement : aucune invite de débarquement.
+    // donc l'invite propose de reprendre la barre.
     etat = majInvite(etat, ancres);
-    expect(etat.invite).toBe('aucune');
+    expect(etat.invite).toBe('prendre_barre');
+  });
+
+  it('interagit uniquement selon la proximité réelle des ancres', () => {
+    const descripteur = créerDescripteurBateau({ x: 0, y: 0, z: 0 }, 0, 'bateau-test');
+    const ancres = extraireAncres(descripteur);
+
+    // Loin de tout point d'intérêt : interagir ne change rien.
+    const loin = creerEtatPilotageComplet(
+      { x: ancres.embarquement.x + 30, y: ancres.embarquement.y, z: ancres.embarquement.z + 30 },
+      descripteur,
+    );
+    expect(interagir(loin, ancres, descripteur)).toBe(loin);
+
+    // Proche de l'embarquement : embarque.
+    const proche = creerEtatPilotageComplet(ancres.embarquement, descripteur);
+    const embarque = interagir(proche, ancres, descripteur);
+    expect(embarque.mode).toBe('bord');
+
+    // Proche de la barre en mode bord : prend la barre.
+    const aBarre = embarquer(embarque, ancres, descripteur);
+    const barre = prendreBarre(aBarre, ancres, descripteur);
+    expect(barre.mode).toBe('pilote');
+
+    // En mode pilote, interagir quitte la barre.
+    const sorti = interagir(barre, ancres, descripteur);
+    expect(sorti.mode).toBe('bord');
   });
 
   it('débarque à un point sûr hors de la coque', () => {

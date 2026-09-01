@@ -209,6 +209,9 @@ export function determinerInvite(
       : 'aucune';
   }
   if (mode === 'bord') {
+    if (trouverAncreProche(ancres, position, ['barre'], DISTANCE_INTERACTION_BARRE)) {
+      return 'prendre_barre';
+    }
     return trouverAncreProche(ancres, position, ['embarquement'], DISTANCE_INTERACTION_DEBARQUEMENT)
       ? 'debarcher'
       : 'aucune';

@@ -20,7 +20,7 @@ type CrochetPilotage = {
   reinitialiser: () => void;
   agir: () => void;
   debarquer: () => void;
-  deplacerBord: (offset: { x: number; z: number }) => void;
+  deplacerBord: (offset: { x: number; y?: number; z: number }) => void;
   piloter: (intentions: { poussee: number; gouvernail: number }) => void;
   avancerTemps: (deltaMs: number) => void;
 };
@@ -62,7 +62,10 @@ async function debarquer(page: Page): Promise<void> {
   });
 }
 
-async function deplacerBord(page: Page, offset: { x: number; z: number }): Promise<void> {
+async function deplacerBord(
+  page: Page,
+  offset: { x: number; y?: number; z: number },
+): Promise<void> {
   await page.evaluate((offsetBord) => {
     const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPilotage })
       .__pirateIslandsE2E;
@@ -111,6 +114,9 @@ test('embarque, prend la barre, navigue, heurte le rivage, sort de barre et déb
   await agir(page);
   const aBord = await lireEtat(page);
   expect(aBord?.mode).toBe('bord');
+
+  // Marche à bord jusqu'à la barre (position locale z ≈ 1,65).
+  await deplacerBord(page, { x: 0, z: 7.3 });
 
   // Prend la barre (interagir près de la barre).
   await agir(page);
@@ -175,13 +181,14 @@ test('embarque, prend la barre, navigue, heurte le rivage, sort de barre et déb
   expect(Number.isFinite(avantMarche?.positionJoueur.z)).toBe(true);
 
   // Marche à bord vers la cale (local vers z négatif) et capture la vue.
-  await deplacerBord(page, { x: 0, z: -4.5 });
+  await deplacerBord(page, { x: 0, y: -1.4, z: -6.5 });
   await page.screenshot({
     path: 'docs/preuves/pilotage-cale-1280x720.png',
     fullPage: false,
   });
 
-  // Débarque (commande explicite du harnais).
+  // Marche à bord jusqu'à la sortie puis débarque (interagir).
+  await deplacerBord(page, { x: 0, z: 1.5 });
   await debarquer(page);
   const debarque = await lireEtat(page);
   expect(debarque?.mode).toBe('pied');

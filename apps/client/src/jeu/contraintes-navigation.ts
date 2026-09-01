@@ -54,6 +54,22 @@ function collisionsBordOcean(monde: DescripteurMonde): readonly ObstacleNavigati
       rayonZ: 30,
       rotationY: 0,
     },
+    {
+      id: 'rivage-bord-est',
+      type: 'rivage',
+      centre: { x: demi + 30, y: 0, z: 0 },
+      rayonX: 30,
+      rayonZ: demiZ + 50,
+      rotationY: 0,
+    },
+    {
+      id: 'rivage-bord-ouest',
+      type: 'rivage',
+      centre: { x: -demi - 30, y: 0, z: 0 },
+      rayonX: 30,
+      rayonZ: demiZ + 50,
+      rotationY: 0,
+    },
   ];
 }
 

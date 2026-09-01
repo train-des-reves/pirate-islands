@@ -1,13 +1,12 @@
 import type { DescripteurBateau } from './bateau';
 import type { ControleBateauMouvement } from './bateau-mouvement';
+import type { EtatActions } from './entrees';
 import { creerEtatJoueur, type MondeCollision } from './mouvement';
 import {
   creerEtatPilotageComplet,
   debarquer,
-  embarquer,
   extraireAncres,
-  prendreBarre,
-  quitterBarre,
+  interagir,
   simulerPilotage,
   type EtatPilotageComplet,
   type MondePilotage,
@@ -30,8 +29,12 @@ export interface HarnaisPilotage {
   lireEtat(): EtatHarnaisPilotage;
   agir(): void;
   debarquer(): void;
-  deplacerBord(offset: { x: number; z: number }): void;
+  deplacerBord(offset: { x: number; y?: number; z: number }): void;
   piloter(intentions: IntentionsPilotage): void;
+  boucle(
+    actions: Pick<EtatActions, 'avancer' | 'reculer' | 'gauche' | 'droite'>,
+    deltaSecondes: number,
+  ): void;
   avancerTemps(deltaSecondes: number): void;
   reinitialiser(): void;
 }
@@ -58,12 +61,16 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
     options.descripteur,
     options.positionBateauInitiale,
   );
-  let deltaSimuleSecondes = 0;
   let intentionsActuelles: IntentionsPilotage = INTENTIONS_AUCUNE;
 
   const monde: MondePilotage = {
     mondePied: options.mondePied,
     collisionsBateau: options.collisionsBateau,
+  };
+  const contraintes = {
+    surfaces: options.descripteur.surfaces,
+    collisions: options.descripteur.collisions,
+    limites: options.descripteur.limitesLocal,
   };
 
   const lireEtat = (): EtatHarnaisPilotage => ({
@@ -85,48 +92,37 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
   };
 
   const agir = (): void => {
-    if (etat.mode === 'pied') {
-      etat = embarquer(etat, ancres, options.descripteur);
-      notifier();
-      return;
-    }
-    if (etat.mode === 'pilote') {
-      etat = quitterBarre(etat, ancres, options.descripteur);
-      notifier();
-      return;
-    }
-    // En mode bord, « interagir » amène à la barre (action principale).
-    etat = prendreBarre(etat, ancres, options.descripteur);
+    etat = interagir(etat, ancres, options.descripteur);
     notifier();
   };
 
   const debarquerExplicite = (): void => {
     if (etat.mode === 'bord') {
       etat = debarquer(etat, ancres, options.descripteur);
-      deltaSimuleSecondes = 0;
       intentionsActuelles = INTENTIONS_AUCUNE;
       notifier();
     }
   };
 
-  const deplacerBord = (offset: { x: number; z: number }): void => {
+  const deplacerBord = (offset: { x: number; y?: number; z: number }): void => {
     if (etat.mode !== 'bord') {
       return;
     }
     const deltaX = Number.isFinite(offset.x) ? offset.x : 0;
+    const deltaY = (offset.y ?? 0) as number;
     const deltaZ = Number.isFinite(offset.z) ? offset.z : 0;
     const positionLocale = {
       x: etat.positionLocale.x + deltaX,
-      y: etat.positionLocale.y,
+      y: etat.positionLocale.y + deltaY,
       z: etat.positionLocale.z + deltaZ,
     };
     etat = {
       ...etat,
       positionLocale,
       passager: creerEtatJoueur({
-        x: positionBateauMondeFromLocal(etat, positionLocale).x,
-        y: positionBateauMondeFromLocal(etat, positionLocale).y,
-        z: positionBateauMondeFromLocal(etat, positionLocale).z,
+        x: positionMondeFromLocal(etat, positionLocale).x,
+        y: positionMondeFromLocal(etat, positionLocale).y,
+        z: positionMondeFromLocal(etat, positionLocale).z,
       }),
     };
     notifier();
@@ -143,21 +139,27 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
     };
   };
 
-  const avancerTemps = (deltaSecondes: number): void => {
-    deltaSimuleSecondes = Number.isFinite(deltaSecondes)
-      ? Math.max(0, Math.min(0.25, deltaSecondes))
-      : 0;
-    if (etat.mode !== 'pilote') {
-      return;
+  const boucle = (
+    actions: Pick<EtatActions, 'avancer' | 'reculer' | 'gauche' | 'droite'>,
+    deltaSecondes: number,
+  ): void => {
+    const delta = Number.isFinite(deltaSecondes) ? Math.max(0, Math.min(0.25, deltaSecondes)) : 0;
+    if (etat.mode === 'pilote') {
+      // En conduite, les actions pilotent le bateau ; intentions = actions.
+      intentionsActuelles = calculerIntentionsDepuisActions(actions);
     }
+    etat = simulerPilotage(etat, actions, 0, delta, monde, contraintes);
+    notifier();
+  };
+
+  const avancerTemps = (deltaSecondes: number): void => {
     const actions = {
       avancer: intentionsActuelles.poussee > 0,
       reculer: intentionsActuelles.poussee < 0,
       gauche: intentionsActuelles.gouvernail < 0,
       droite: intentionsActuelles.gouvernail > 0,
     };
-    etat = simulerPilotage(etat, actions, 0, deltaSimuleSecondes, monde, contraintes(options));
-    notifier();
+    boucle(actions, deltaSecondes);
   };
 
   notifier();
@@ -168,6 +170,7 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
     debarquer: debarquerExplicite,
     deplacerBord,
     piloter,
+    boucle,
     avancerTemps,
     reinitialiser: () => {
       etat = creerEtatPilotageComplet(
@@ -175,14 +178,13 @@ export function construireHarnaisPilotage(options: OptionsHarnaisPilotage): Harn
         options.descripteur,
         options.positionBateauInitiale,
       );
-      deltaSimuleSecondes = 0;
       intentionsActuelles = INTENTIONS_AUCUNE;
       notifier();
     },
   };
 }
 
-function positionBateauMondeFromLocal(
+function positionMondeFromLocal(
   etat: EtatPilotageComplet,
   positionLocale: { x: number; y: number; z: number },
 ): { x: number; y: number; z: number } {
@@ -195,10 +197,11 @@ function positionBateauMondeFromLocal(
   };
 }
 
-function contraintes(options: OptionsHarnaisPilotage) {
+function calculerIntentionsDepuisActions(
+  actions: Pick<EtatActions, 'avancer' | 'reculer' | 'gauche' | 'droite'>,
+): IntentionsPilotage {
   return {
-    surfaces: options.descripteur.surfaces,
-    collisions: options.descripteur.collisions,
-    limites: options.descripteur.limitesLocal,
+    poussee: Number(actions.avancer) - Number(actions.reculer),
+    gouvernail: Number(actions.droite) - Number(actions.gauche),
   };
 }

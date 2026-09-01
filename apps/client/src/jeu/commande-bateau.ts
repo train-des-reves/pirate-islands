@@ -99,6 +99,31 @@ export function majInvite(
   return { ...etat, invite };
 }
 
+/**
+ * Applique l'action sémantique « interagir » selon le mode et la proximité
+ * réelle des ancres. Ne force jamais une transition hors de portée.
+ */
+export function interagir(
+  etat: EtatPilotageComplet,
+  ancres: AncragesPilotage,
+  descripteur: DescripteurBateau,
+): EtatPilotageComplet {
+  if (etat.mode === 'pilote') {
+    return quitterBarre(etat, ancres, descripteur);
+  }
+  const invite = majInvite(etat, ancres).invite;
+  if (invite === 'embarquer') {
+    return embarquer(etat, ancres, descripteur);
+  }
+  if (invite === 'prendre_barre') {
+    return prendreBarre(etat, ancres, descripteur);
+  }
+  if (invite === 'debarcher') {
+    return debarquer(etat, ancres, descripteur);
+  }
+  return etat;
+}
+
 /** Embauche le joueur à bord du bateau depuis une position proche de l'ancre d'embarquement. */
 export function embarquer(
   etat: EtatPilotageComplet,
