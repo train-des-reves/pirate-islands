@@ -50,9 +50,24 @@ export interface DiagnosticSalleConnecte {
   readonly infligerDegatsE2E: (degats: number) => void;
   /** Lit l'état de combat réel observé après la dernière synchronisation réseau. */
   readonly lireCombat: () => EtatCombatDiagnostic;
+  readonly lirePirates: () => readonly EtatPirateDiagnostic[];
+  readonly lirePositionJoueur: () => { readonly x: number; readonly y: number; readonly z: number };
+  /** Déplace le joueur via le protocole normal, uniquement dans le harnais E2E. */
+  readonly positionnerJoueurE2E: (x: number, z: number) => void;
   /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
   readonly lireDeconnexion: () => number | undefined;
   readonly detruire: () => void;
+}
+
+export interface EtatPirateDiagnostic {
+  readonly id: string;
+  readonly ileId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly sante: number;
+  readonly vivant: boolean;
+  readonly statut: string;
 }
 
 const HAUTEUR_YEUX_DIAGNOSTIC = 1.62;
@@ -247,6 +262,23 @@ export async function connecterDiagnosticSalle(
   };
 
   let détruite = false;
+  const lirePirates = (): readonly EtatPirateDiagnostic[] =>
+    [...salleTypée.state.pirates.values()].flatMap((pirate) => {
+      const transformation = pirate.transformation;
+      if (!transformation) {
+        return [];
+      }
+      return [{
+        id: pirate.identifiant,
+        ileId: pirate.identifiant.split('-pirate-')[0] ?? '',
+        x: transformation.x,
+        y: transformation.y,
+        z: transformation.z,
+        sante: pirate.sante,
+        vivant: pirate.vivant,
+        statut: pirate.statut,
+      }];
+    });
   return {
     salle: salleTypée,
     tirer: (cibleId?) => {
@@ -304,6 +336,28 @@ export async function connecterDiagnosticSalle(
       codeDeconnexion: etatCombat.codeDeconnexion,
     }),
     lireDeconnexion: () => dernierCodeDeconnexion,
+    lirePirates,
+    lirePositionJoueur: () => {
+      const joueur = lireJoueurLocal(salleTypée);
+      return {
+        x: joueur?.transformation.x ?? 0,
+        y: joueur?.transformation.y ?? 0,
+        z: joueur?.transformation.z ?? 0,
+      };
+    },
+    positionnerJoueurE2E: (x, z) => {
+      if (détruite || !Number.isFinite(x) || !Number.isFinite(z)) {
+        return;
+      }
+      const joueur = lireJoueurLocal(salleTypée);
+      salleTypée.send(NOMS_MESSAGES.transformationJoueur, {
+        position: { x, y: joueur?.transformation.y ?? 0, z },
+        lacet: joueur?.transformation.lacet ?? 0,
+        tangage: joueur?.transformation.tangage ?? 0,
+        roulis: joueur?.transformation.roulis ?? 0,
+        horodatage: Date.now(),
+      });
+    },
     detruire: () => {
       if (détruite) {
         return;

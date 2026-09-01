@@ -11,7 +11,7 @@ import {
   type EtatSalle,
   type MessageResultatTir,
 } from '@pirate/protocole';
-import { resoudreCibleTiree } from '@pirate/coeur-jeu';
+import { genererMonde, pointDansCollisionIle, resoudreCibleTiree } from '@pirate/coeur-jeu';
 import { démarrerServeur, type ServeurDemarre } from '../apps/serveur/src/server.js';
 
 let serveur: ServeurDemarre | undefined;
@@ -586,6 +586,84 @@ describe('SalleJeu Colyseus', () => {
       .poll(() => salle.state.joueurs.get(sessionId)?.statut, { timeout: 2_000 })
       .toBe('actif');
     serveurModeE2E = false;
+  });
+
+  it('simule les pirates terrestres à pas fixe et attaque uniquement sur son île', async () => {
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client, undefined, { graine: 'graine-terrestre' });
+    await attendrePirates(salle, 9);
+
+    const monde = genererMonde('graine-terrestre');
+    const ile = monde.iles[0];
+    if (!ile) throw new Error('Île de test absente.');
+    const pirateInitial = salle.state.pirates.get(ile.apparitionsPirates[0]?.id ?? '');
+    if (!pirateInitial) throw new Error('Pirate terrestre de test absent.');
+    const cibleX = pirateInitial.transformation.x;
+    const cibleZ = pirateInitial.transformation.z;
+
+    expect(pirateInitial.identifiant.startsWith(ile.id + '-pirate-')).toBe(true);
+    expect(pointDansCollisionIle(ile, {
+      x: cibleX,
+      y: 0,
+      z: cibleZ,
+    })).toBe(true);
+
+    // Laisser au serveur le temps d’autoriser le déplacement à vitesse normale,
+    // puis placer le pêcheur sur la surface de l’île par le protocole joueur.
+    await new Promise((résoudre) => setTimeout(résoudre, 4_000));
+    salle.send(NOMS_MESSAGES.transformationJoueur, {
+      position: {
+        x: cibleX,
+        y: 0,
+        z: cibleZ,
+      },
+      lacet: 0,
+      tangage: 0,
+      roulis: 0,
+      horodatage: Date.now(),
+    });
+    await attendreCondition(
+      salle,
+      () => Math.abs((salle.state.joueurs.get(salle.sessionId)?.transformation.x ?? 0) - cibleX) < 0.01,
+      'le pêcheur n’est pas arrivé sur l’île',
+    );
+
+    await attendreCondition(
+      salle,
+      () => salle.state.pirates.get(pirateInitial.identifiant)?.statut === 'attaque',
+      'le pirate n’a pas détecté le pêcheur',
+    );
+    await attendreCondition(
+      salle,
+      () => (salle.state.joueurs.get(salle.sessionId)?.sante ?? 100) < SANTE_JOUEUR_MAXIMALE,
+      'le pirate n’a pas infligé de dégâts',
+    );
+
+    await attendreCondition(
+      salle,
+      () => salle.state.joueurs.get(salle.sessionId)?.vivant === false,
+      'le pirate n’a pas pu tuer le pêcheur',
+    );
+    const santéAprèsMort = salle.state.joueurs.get(salle.sessionId)?.sante;
+    await new Promise((résoudre) => setTimeout(résoudre, 250));
+    expect(salle.state.joueurs.get(salle.sessionId)?.sante).toBe(santéAprèsMort);
+
+    await attendreCondition(
+      salle,
+      () => salle.state.joueurs.get(salle.sessionId)?.vivant === true,
+      'le pêcheur mort n’est pas réapparu automatiquement',
+    );
+  }, 30_000);
+
+  it('active le spawn de rencontre uniquement dans le mode E2E serveur', async () => {
+    serveurModeE2E = true;
+    const client = await ouvrirClient();
+    const salle = await rejoindreSalle(client, undefined, { graine: 'rencontre-mvp' });
+    await attendrePirates(salle, 9);
+    const pirate = salle.state.pirates.get('ile-aube-pirate-1');
+    const joueur = salle.state.joueurs.get(salle.sessionId);
+    expect(joueur?.transformation.x).toBe(pirate?.transformation.x);
+    expect(joueur?.transformation.z).toBe(pirate?.transformation.z);
   });
 
   it('rejette le rejeu d’une séquence consommée après la réapparition', async () => {

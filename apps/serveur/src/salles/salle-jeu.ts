@@ -32,6 +32,9 @@ import {
   appliquerDegatsPirate,
   choisirReapparition,
   genererMonde,
+  hauteurSurfaceIle,
+  MachineEtatPirate,
+  PROFIL_TERRE,
   reinitialiserJoueurReapparu,
   reapparitionDue,
   resoudreCibleTiree,
@@ -71,6 +74,15 @@ type ClientSalle = Client<{
 
 const CODE_MESSAGE_INVALIDE = 4003;
 const CODE_MESSAGE_INCONNU = 4004;
+const PAS_SIMULATION_PIRATES_MS = 50;
+const PAS_SIMULATION_PIRATES_SEC = PAS_SIMULATION_PIRATES_MS / 1000;
+const NOMBRE_MAXIMUM_PAS_PAR_TICK = 4;
+const MARGE_INTERIEURE_ILE = 0.84;
+
+interface IaPirateServeur {
+  readonly machine: MachineEtatPirate;
+  readonly ileId: string;
+}
 
 function vitesseManifestementImpossible(
   précédente: DerniereTransformation,
@@ -110,8 +122,11 @@ export class SalleJeu extends Room<{
 
   private prochainIndexApparition = 0;
   private readonly dernièresTransformations = new Map<string, DerniereTransformation>();
+  private readonly iaPirates = new Map<string, IaPirateServeur>();
   private monde: ReturnType<typeof genererMonde> = genererMonde();
   private modeE2E = false;
+  private modeRencontreE2E = false;
+  private accumulationSimulationSec = 0;
 
   override onCreate(options: unknown): void {
     const validation = validerOptionsConnexion(options);
@@ -126,6 +141,7 @@ export class SalleJeu extends Room<{
       identifiantSalle: this.roomId,
       ...(graine === undefined ? {} : { graine }),
     });
+    this.modeRencontreE2E = this.modeE2E && this.state.metadonnees.graine === 'rencontre-mvp';
     this.metadata = {
       identifiantSalle: this.roomId,
       versionProtocole: this.state.metadonnees.versionProtocole,
@@ -135,6 +151,7 @@ export class SalleJeu extends Room<{
 
     this.monde = genererMonde(this.state.metadonnees.graine);
     this.peuplerPirates();
+    this.setSimulationInterval((deltaMs) => this.actualiserSimulation(deltaMs), PAS_SIMULATION_PIRATES_MS);
 
     this.onMessage('*', (client, type, message) => {
       this.traiterMessage(client, type, message);
@@ -173,6 +190,18 @@ export class SalleJeu extends Room<{
     const joueur = creerJoueur(client.sessionId, indexApparition, validation.valeur.nom);
     const bateau = creerBateau(client.sessionId, indexApparition);
 
+    // Le harnais E2E de rencontre commence directement sur l’île isolée. Ce
+    // raccourci est strictement borné au mode serveur de test et à sa graine
+    // documentée ; aucun client de production ne peut choisir cette position.
+    if (this.modeRencontreE2E && indexApparition === 0) {
+      const apparition = this.monde.iles[0]?.apparitionsPirates[0];
+      if (apparition) {
+        joueur.transformation.x = apparition.position.x;
+        joueur.transformation.y = 0;
+        joueur.transformation.z = apparition.position.z;
+      }
+    }
+
     this.state.joueurs.set(client.sessionId, joueur);
     this.state.bateaux.set(bateau.identifiant, bateau);
     this.state.phase = PHASE_SALLE_PARTIE;
@@ -207,10 +236,164 @@ export class SalleJeu extends Room<{
         pirate.transformation.y = apparition.position.y;
         pirate.transformation.z = apparition.position.z;
         pirate.transformation.lacet = 0;
-        pirate.statut = 'patrouille';
+        pirate.statut = 'inactif';
         this.state.pirates.set(pirate.identifiant, pirate);
+        this.iaPirates.set(pirate.identifiant, {
+          ileId: ile.id,
+          machine: new MachineEtatPirate({
+            graine: this.state.metadonnees.graine + ':' + apparition.id,
+            profil: {
+              ...PROFIL_TERRE,
+              pointAncrage: {
+                x: ile.transformation.position.x,
+                z: ile.transformation.position.z,
+              },
+            },
+            positionDepart: { x: apparition.position.x, z: apparition.position.z },
+            limites: {
+              largeur: 220,
+              profondeur: 220,
+              rayonTerrestreMax: Math.max(ile.rayonX, ile.rayonZ),
+              centre: {
+                x: ile.transformation.position.x,
+                z: ile.transformation.position.z,
+              },
+              rayonX: ile.rayonX,
+              rayonZ: ile.rayonZ,
+              rotationY: ile.transformation.rotationY,
+              rayonTerrestreRatio: MARGE_INTERIEURE_ILE,
+            },
+          }),
+        });
       }
     }
+  }
+
+  /** Exécute l’IA sur un pas fixe, sans laisser le retard créer une rafale. */
+  private actualiserSimulation(deltaMs: number): void {
+    const deltaSain = Number.isFinite(deltaMs) ? Math.max(0, Math.min(250, deltaMs)) : 0;
+    this.accumulationSimulationSec = Math.min(
+      this.accumulationSimulationSec + deltaSain / 1000,
+      PAS_SIMULATION_PIRATES_SEC * NOMBRE_MAXIMUM_PAS_PAR_TICK,
+    );
+
+    for (const client of this.clients) {
+      const joueur = this.state.joueurs.get(client.sessionId);
+      const donnees = client.userData;
+      if (joueur && donnees && !joueur.vivant) {
+        this.appliquerReapparitionSiDue(client, joueur, Date.now(), donnees);
+      }
+    }
+
+    let nombrePas = 0;
+    while (
+      this.accumulationSimulationSec + 1e-9 >= PAS_SIMULATION_PIRATES_SEC &&
+      nombrePas < NOMBRE_MAXIMUM_PAS_PAR_TICK
+    ) {
+      this.accumulationSimulationSec -= PAS_SIMULATION_PIRATES_SEC;
+      this.actualiserPirates(PAS_SIMULATION_PIRATES_SEC);
+      nombrePas += 1;
+    }
+  }
+
+  private actualiserPirates(deltaSec: number): void {
+    for (const [pirateId, ia] of this.iaPirates) {
+      const pirate = this.state.pirates.get(pirateId);
+      const ile = this.monde.iles.find((entrée) => entrée.id === ia.ileId);
+      if (!pirate || !ile || !pirate.vivant) {
+        continue;
+      }
+
+      const cible = this.trouverCiblePirate(ile, pirate);
+      const sortie = ia.machine.actualiser(deltaSec, cible);
+      pirate.transformation.x = sortie.position.x;
+      pirate.transformation.z = sortie.position.z;
+      const surface = hauteurSurfaceIle(ile, {
+        x: sortie.position.x,
+        y: 0,
+        z: sortie.position.z,
+      });
+      if (surface !== undefined) {
+        pirate.transformation.y = surface + 0.45;
+      }
+      pirate.transformation.lacet = sortie.cap;
+      pirate.statut = sortie.etat;
+
+      const intention = sortie.intentionAttaque;
+      if (!intention) {
+        continue;
+      }
+
+      const joueur = this.state.joueurs.get(intention.cible);
+      if (!joueur || !joueur.vivant || !this.estPointSurIle(ile, joueur.transformation)) {
+        continue;
+      }
+
+      const distance = Math.hypot(
+        joueur.transformation.x - pirate.transformation.x,
+        joueur.transformation.z - pirate.transformation.z,
+      );
+      if (distance > intention.portee) {
+        continue;
+      }
+
+      const joueurApresDegats = appliquerDegatsJoueur(
+        { sessionId: joueur.sessionId, sante: joueur.sante, vivant: joueur.vivant },
+        DEGATS_PAR_TIR_PIRATE,
+      );
+      joueur.sante = joueurApresDegats.sante;
+      joueur.vivant = joueurApresDegats.vivant;
+      joueur.statut = joueurApresDegats.vivant ? 'actif' : 'mort';
+      if (!joueurApresDegats.vivant) {
+        const client = this.clients.find((entrée) => entrée.sessionId === joueur.sessionId);
+        if (client) {
+          const données: DonneesClientSalle = client.userData ?? {
+            indexApparition: 0,
+            dernierTirMs: 0,
+            derniereSequence: 0,
+            prochaineReapparitionMs: 0,
+          };
+          client.userData = {
+            ...données,
+            prochaineReapparitionMs: Date.now() + DELAI_REAPPARITION_JOUEUR_MS,
+          };
+        }
+      }
+    }
+  }
+
+  private trouverCiblePirate(
+    ile: ReturnType<typeof genererMonde>['iles'][number],
+    pirate: { readonly transformation: { readonly x: number; readonly z: number } },
+  ): { readonly id: string; readonly position: { readonly x: number; readonly z: number } } | undefined {
+    let meilleure:
+      | { readonly id: string; readonly position: { readonly x: number; readonly z: number } }
+      | undefined;
+    let distanceMinimale = Number.POSITIVE_INFINITY;
+    for (const joueur of this.state.joueurs.values()) {
+      if (!joueur.vivant || !this.estPointSurIle(ile, joueur.transformation)) {
+        continue;
+      }
+      const distance = Math.hypot(
+        joueur.transformation.x - pirate.transformation.x,
+        joueur.transformation.z - pirate.transformation.z,
+      );
+      if (distance < distanceMinimale) {
+        distanceMinimale = distance;
+        meilleure = {
+          id: joueur.sessionId,
+          position: { x: joueur.transformation.x, z: joueur.transformation.z },
+        };
+      }
+    }
+    return meilleure;
+  }
+
+  private estPointSurIle(
+    ile: ReturnType<typeof genererMonde>['iles'][number],
+    point: { readonly x: number; readonly z: number },
+  ): boolean {
+    return hauteurSurfaceIle(ile, { x: point.x, y: 0, z: point.z }) !== undefined;
   }
 
   private traiterMessage(client: ClientSalle, type: string | number, message: unknown): void {
@@ -419,6 +602,9 @@ export class SalleJeu extends Room<{
         pirate.sante = pirateApresDegats.sante;
         pirate.vivant = pirateApresDegats.vivant;
         pirate.statut = pirateApresDegats.vivant ? 'attaque' : 'mort';
+        if (!pirateApresDegats.vivant) {
+          this.iaPirates.get(cibleId)?.machine.tuer();
+        }
         pirateNeutralise = !pirateApresDegats.vivant;
       }
     }

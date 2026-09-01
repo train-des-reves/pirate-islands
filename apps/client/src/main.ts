@@ -27,6 +27,7 @@ import {
   SynchroniseurPecheursDistants,
   type EmetteurTransformation,
 } from './jeu/synchroniseur-pecheurs';
+import { SynchroniseurPiratesTerrestres } from './jeu/synchroniseur-pirates';
 import {
   construireMondeBabylon,
   estModePresentationBateau,
@@ -62,6 +63,7 @@ import {
   connecterDiagnosticSalle,
   type DiagnosticSalleConnecte,
   type ElementsDiagnosticSalle,
+  type EtatPirateDiagnostic,
 } from './jeu/diagnostic-salle';
 import { construireHarnaisPeche } from './interface/harnais-peche.js';
 import { monterPresentationPeche } from './interface/presenter-peche.js';
@@ -164,6 +166,13 @@ const combatResultat = document.querySelector<HTMLElement>('[data-testid="combat
 const combatDeconnexion = document.querySelector<HTMLElement>(
   '[data-testid="combat-deconnexion"]',
 );
+const rencontrePirates = document.querySelector<HTMLElement>('[data-testid="rencontre-pirates"]');
+const rencontreJoueur = document.querySelector<SVGCircleElement>('[data-testid="rencontre-joueur"]');
+const rencontrePirate = document.querySelector<SVGCircleElement>('[data-testid="rencontre-pirate"]');
+const rencontrePortee = document.querySelector<SVGPathElement>('[data-testid="rencontre-portee"]');
+const rencontreEtat = document.querySelector<HTMLElement>('[data-testid="rencontre-etat"]');
+const rencontreSante = document.querySelector<HTMLElement>('[data-testid="rencontre-sante"]');
+const rencontreObservateurs = document.querySelector<HTMLElement>('[data-testid="rencontre-observateurs"]');
 const diagnosticTir = document.querySelector<HTMLElement>('[data-testid="tir-diagnostic"]');
 const panneauAccueil = document.querySelector<HTMLElement>('[data-testid="panneau-accueil"]');
 const formulaireConnexion = document.querySelector<HTMLFormElement>(
@@ -213,6 +222,13 @@ if (
   !combatReapparition ||
   !combatResultat ||
   !combatDeconnexion ||
+  !rencontrePirates ||
+  !rencontreJoueur ||
+  !rencontrePirate ||
+  !rencontrePortee ||
+  !rencontreEtat ||
+  !rencontreSante ||
+  !rencontreObservateurs ||
   !diagnosticTir ||
   !panneauAccueil ||
   !formulaireConnexion ||
@@ -250,6 +266,12 @@ const boutonOuvrir = boutonOuvrirReglages;
 const boutonAnnuler = boutonAnnulerReglages;
 const boutonAppliquer = boutonAppliquerReglages;
 const boutonReinitialiser = boutonReinitialiserReglages;
+const panneauRencontrePirates = rencontrePirates;
+const pointRencontreJoueur = rencontreJoueur;
+const pointRencontrePirate = rencontrePirate;
+const texteRencontreEtat = rencontreEtat;
+const texteRencontreSante = rencontreSante;
+const texteRencontreObservateurs = rencontreObservateurs;
 
 let reglages = creerEtatReglages(chargerReglagesDepuisCookie(document.cookie));
 let actionReglageEnCours: ActionJeu | undefined;
@@ -451,6 +473,7 @@ interface EtatJeuE2E {
     readonly invite: string | null;
     readonly statut: string;
   };
+  readonly pirates?: readonly EtatPirateDiagnostic[];
 }
 
 interface EtatPecheurE2E {
@@ -500,6 +523,9 @@ declare global {
       };
       /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
       lireDeconnexion?: () => number | undefined;
+      lirePirates?: () => readonly EtatPirateDiagnostic[];
+      lirePositionJoueur?: () => { readonly x: number; readonly y: number; readonly z: number };
+      positionnerJoueurE2E?: (x: number, z: number) => void;
     };
   }
 }
@@ -525,6 +551,7 @@ const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
+const modeRencontrePiratesE2E = modeCombatE2E && paramètres.get('rencontre') === '1';
 const cameraDemandée = paramètres.get('camera');
 const modeCamera: ModeCameraMonde =
   cameraDemandée === 'rivage' ||
@@ -651,6 +678,33 @@ if (présentationBateau) {
   const texte = textesPrésentation[modeCamera];
   document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren(texte.eyebrow);
   document.querySelector<HTMLElement>('.tagline')?.replaceChildren(texte.tagline);
+}
+
+function rafraichirRencontrePirates(connexion: DiagnosticSalleConnecte): void {
+  const pirates = connexion.lirePirates();
+  const pirate = pirates.find((entrée) => !entrée.vivant) ?? pirates[0];
+  const joueur = connexion.salle.state.joueurs.get(connexion.salle.sessionId);
+  if (!pirate || !joueur) {
+    texteRencontreEtat.textContent = 'Pirate : en attente';
+    texteRencontreSante.textContent = 'Santé joueur : en attente · pirate : en attente';
+    return;
+  }
+
+  const ile = monde.iles.find((entrée) => entrée.id === pirate.ileId);
+  const centre = ile?.transformation.position ?? { x: 0, y: 0, z: 0 };
+  const rayonX = ile?.rayonX ?? 1;
+  const rayonZ = ile?.rayonZ ?? 1;
+  const convertirX = (x: number): number => Math.max(42, Math.min(378, 210 + ((x - centre.x) / rayonX) * 150));
+  const convertirY = (z: number): number => Math.max(28, Math.min(192, 110 + ((z - centre.z) / rayonZ) * 72));
+  pointRencontrePirate.setAttribute('cx', String(convertirX(pirate.x)));
+  pointRencontrePirate.setAttribute('cy', String(convertirY(pirate.z)));
+  pointRencontrePirate.setAttribute('fill', pirate.vivant ? (pirate.statut === 'attaque' ? '#ff765f' : '#d8b45c') : '#91a4ad');
+  pointRencontrePirate.setAttribute('opacity', pirate.vivant ? '1' : '0.62');
+  pointRencontreJoueur.setAttribute('cx', String(convertirX(joueur.transformation.x)));
+  pointRencontreJoueur.setAttribute('cy', String(convertirY(joueur.transformation.z)));
+  texteRencontreEtat.textContent = `Pirate ${pirate.id} · ${pirate.statut} · ${pirate.vivant ? 'vivant' : 'mort'}`;
+  texteRencontreSante.textContent = `Santé joueur : ${joueur.sante} · pirate : ${pirate.sante}`;
+  texteRencontreObservateurs.textContent = `État partagé · ${pirates.length} pirates · graine ${connexion.salle.state.metadonnees.graine}`;
 }
 
 canvasJeu.width = LARGEUR_REFERENCE;
@@ -1233,6 +1287,7 @@ function construireScene(): JeuClient | undefined {
     actualiserInterface();
 
     let synchroniseurPecheurs: SynchroniseurPecheursDistants | undefined;
+    let synchroniseurPirates: SynchroniseurPiratesTerrestres | undefined;
     let emetteurTransformation: EmetteurTransformation | undefined;
     let retirerEtiquettesPecheurs: (() => void) | undefined;
 
@@ -1269,6 +1324,20 @@ function construireScene(): JeuClient | undefined {
       ).retirer;
     };
 
+    const assurerSynchronisationPirates = (): void => {
+      const salle = connecteurPanneau?.lireSalle();
+      if (!salle) {
+        synchroniseurPirates?.liberer();
+        synchroniseurPirates = undefined;
+        return;
+      }
+      synchroniseurPirates ??= new SynchroniseurPiratesTerrestres(
+        () => connecteurPanneau?.lireSalle(),
+        scene,
+      );
+      synchroniseurPirates.mettreAJour();
+    };
+
     let dernierTemps = performance.now();
     const boucle = (): void => {
       const maintenant = performance.now();
@@ -1276,6 +1345,7 @@ function construireScene(): JeuClient | undefined {
       dernierTemps = maintenant;
 
       assurerSynchronisationPecheurs();
+      assurerSynchronisationPirates();
 
       if (verrouillageE2EForce && !enPause && !entrees.estPointeurVerrouille()) {
         entrees.simulerVerrouillage(true);
@@ -1344,6 +1414,7 @@ function construireScene(): JeuClient | undefined {
           pecheur.mettreAJour(deltaSecondes);
         }
       }
+      synchroniseurPirates?.mettreAJourInterpolation(deltaSecondes);
 
       actualiserInterface();
       scene.render();
@@ -1361,6 +1432,7 @@ function construireScene(): JeuClient | undefined {
       detruire: () => {
         retirerEtiquettesPecheurs?.();
         synchroniseurPecheurs?.liberer();
+        synchroniseurPirates?.liberer();
         entrees.detacher();
         window.removeEventListener('resize', redimensionner);
         moteur.stopRenderLoop(boucle);
@@ -1524,7 +1596,9 @@ if (modeDiagnosticSalle) {
   conteneurApplication.dataset.diagnostics = 'actifs';
   const urlServeur = import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567';
   const graineDiagnostic = paramètres.get('graine')?.trim();
-  const optionsDiagnostic = graineDiagnostic ? { graine: graineDiagnostic } : {};
+  const optionsDiagnostic = {
+    ...(graineDiagnostic ? { graine: graineDiagnostic } : {}),
+  };
   const identifiantSalle = paramètres.get('room')?.trim() || undefined;
 
   void connecterDiagnosticSalle(
@@ -1536,6 +1610,14 @@ if (modeDiagnosticSalle) {
     .then((connexion) => {
       diagnosticSalleConnecte = connexion;
       if (modeCombatE2E) {
+        const actualiserRencontre = modeRencontrePiratesE2E
+          ? () => rafraichirRencontrePirates(connexion)
+          : undefined;
+        if (actualiserRencontre) {
+          panneauRencontrePirates.hidden = false;
+          actualiserRencontre();
+          window.setInterval(actualiserRencontre, 50);
+        }
         window.__pirateIslandsE2E = {
           verrouillerPointeur: () => undefined,
           libererPointeur: () => undefined,
@@ -1564,6 +1646,9 @@ if (modeDiagnosticSalle) {
           infligerDegatsE2E: connexion.infligerDegatsE2E,
           lireCombat: connexion.lireCombat,
           lireDeconnexion: connexion.lireDeconnexion,
+          lirePirates: connexion.lirePirates,
+          lirePositionJoueur: connexion.lirePositionJoueur,
+          positionnerJoueurE2E: connexion.positionnerJoueurE2E,
         };
       }
     })

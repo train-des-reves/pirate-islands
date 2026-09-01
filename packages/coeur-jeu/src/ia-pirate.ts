@@ -84,6 +84,14 @@ export interface LimitesZoneIaPirate {
   readonly largeur: number;
   readonly profondeur: number;
   readonly rayonTerrestreMax: number;
+  /** Centre monde de la zone, lorsqu’une zone locale est utilisée. */
+  readonly centre?: Coordonnees;
+  /** Demi-axes de l’ellipse praticable, dans le repère monde. */
+  readonly rayonX?: number;
+  readonly rayonZ?: number;
+  readonly rotationY?: number;
+  /** Marge intérieure appliquée à l’ellipse pour éviter l’eau et la bordure. */
+  readonly rayonTerrestreRatio?: number;
 }
 
 /** Option de construction de la machine d'états. */
@@ -546,9 +554,44 @@ function choisirCiblePatrouille(
 }
 
 function bornerCoordonnees(coordonnees: Coordonnees, limites: LimitesZoneIaPirate): Coordonnees {
-  return {
+  const bornee = {
     x: bornerNombre(coordonnees.x, -limites.largeur / 2, limites.largeur / 2),
     z: bornerNombre(coordonnees.z, -limites.profondeur / 2, limites.profondeur / 2),
+  };
+  const rayonX = limites.rayonX;
+  const rayonZ = limites.rayonZ;
+
+  if (
+    !limites.centre ||
+    typeof rayonX !== 'number' ||
+    typeof rayonZ !== 'number' ||
+    !Number.isFinite(rayonX) ||
+    !Number.isFinite(rayonZ) ||
+    rayonX <= 0 ||
+    rayonZ <= 0
+  ) {
+    return bornee;
+  }
+
+  const rotation = Number.isFinite(limites.rotationY) ? limites.rotationY ?? 0 : 0;
+  const cosinus = Math.cos(rotation);
+  const sinus = Math.sin(rotation);
+  const relatifX = bornee.x - limites.centre.x;
+  const relatifZ = bornee.z - limites.centre.z;
+  const localX = relatifX * cosinus + relatifZ * sinus;
+  const localZ = -relatifX * sinus + relatifZ * cosinus;
+  const distanceEllipse = Math.hypot(localX / rayonX, localZ / rayonZ);
+  const ratio = Math.max(0.1, Math.min(1, limites.rayonTerrestreRatio ?? 1));
+  if (distanceEllipse <= ratio) {
+    return bornee;
+  }
+
+  const facteur = ratio / Math.max(Number.EPSILON, distanceEllipse);
+  const borneLocaleX = localX * facteur;
+  const borneLocaleZ = localZ * facteur;
+  return {
+    x: limites.centre.x + borneLocaleX * cosinus - borneLocaleZ * sinus,
+    z: limites.centre.z + borneLocaleX * sinus + borneLocaleZ * cosinus,
   };
 }
 

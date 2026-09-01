@@ -67,6 +67,19 @@
         <p data-testid="combat-deconnexion">Rejet serveur : aucun</p>
         <p class="diagnostic-salle-erreur" data-testid="diagnostic-salle-erreur" hidden></p>
       </aside>
+      <aside class="rencontre-pirates" data-testid="rencontre-pirates" hidden aria-live="polite">
+        <p class="rencontre-pirates-eyebrow">Harnais E2E · île isolée</p>
+        <h2>Rencontre terrestre</h2>
+        <svg viewBox="0 0 420 220" role="img" aria-label="État synchronisé de l’île et du pirate">
+          <ellipse cx="210" cy="110" rx="170" ry="82" fill="#244f42" stroke="#d8b45c" stroke-width="3" />
+          <circle data-testid="rencontre-joueur" cx="210" cy="110" r="9" fill="#8fe3ff" />
+          <circle data-testid="rencontre-pirate" cx="110" cy="110" r="12" fill="#ff765f" />
+          <path data-testid="rencontre-portee" d="M110 110 A70 70 0 0 1 180 110" fill="none" stroke="#ff765f" stroke-opacity=".55" stroke-dasharray="5 5" />
+        </svg>
+        <p data-testid="rencontre-etat">Pirate : en attente</p>
+        <p data-testid="rencontre-sante">Santé joueur : en attente · pirate : en attente</p>
+        <p data-testid="rencontre-observateurs">Observateur serveur : en attente</p>
+      </aside>
       <aside
         class="panneau-accueil"
         data-testid="panneau-accueil"

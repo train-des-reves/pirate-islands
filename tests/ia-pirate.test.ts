@@ -175,4 +175,36 @@ describe('machine à états de l’IA pirate', () => {
       }
     }
   });
+
+  it('reste dans une ellipse terrestre locale même si la cible est hors île', () => {
+    const machine = new MachineEtatPirate({
+      graine: 'test-ellipse-terrestre',
+      profil: {
+        ...PROFIL_TERRE,
+        pointAncrage: { x: 40, z: -20 },
+      },
+      positionDepart: { x: 40, z: -20 },
+      limites: {
+        largeur: 220,
+        profondeur: 220,
+        rayonTerrestreMax: 16,
+        centre: { x: 40, z: -20 },
+        rayonX: 16,
+        rayonZ: 10,
+        rotationY: 0.3,
+        rayonTerrestreRatio: 0.84,
+      },
+    });
+
+    for (let index = 0; index < 200; index += 1) {
+      const sortie = machine.actualiser(DELTA, cible('hors-ile', 200, 200));
+      const relatifX = sortie.position.x - 40;
+      const relatifZ = sortie.position.z + 20;
+      const distanceEllipse = Math.hypot(
+        (relatifX * Math.cos(0.3) + relatifZ * Math.sin(0.3)) / 16,
+        (-relatifX * Math.sin(0.3) + relatifZ * Math.cos(0.3)) / 10,
+      );
+      expect(distanceEllipse).toBeLessThanOrEqual(0.84 + 0.001);
+    }
+  });
 });
