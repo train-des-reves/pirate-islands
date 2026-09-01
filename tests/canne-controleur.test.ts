@@ -216,16 +216,45 @@ describe('contrôleur de canne locale', () => {
     expect(gestionnaire.lireEtat().vue).toBe('remontee');
     expect(gestionnaire.lireEtat().peche.resultat).toBe('annulee');
 
-    // Un retour de morsure poussé après coup (séquence antérieure) est ignoré
-    // sans faire régresser l'état ni lever d'erreur.
+    // Un retour de morsure poussé après coup, même avec une séquence identique
+    // et un temps plus récent, est ignoré : la séquence a été clôturée par
+    // l'annulation et ne doit pas régresser.
+    const séquenceClôturée = gestionnaire.lireEtat().peche.sequence;
     const morsureTardive = {
       ...gestionnaire.lireEtat().peche,
       phase: 'morsure' as const,
-      sequence: 0,
+      sequence: séquenceClôturée,
       tempsCourantMs: faux.maintenant() + 100,
     };
     expect(() => gestionnaire.recevoirEtatServeur(morsureTardive)).not.toThrow();
     expect(gestionnaire.lireEtat().vue).toBe('remontee');
+  });
+
+  it('rejette un état serveur repoussé après réinitialisation (séquence remise à zéro)', () => {
+    const zone = zoneDeMonde();
+    const faux = construire(zone, { x: zone.centre.x, y: 0, z: zone.centre.z });
+    const { gestionnaire, avancer } = faux;
+    gestionnaire.actualiser({ tirer: false, interagir: true });
+    gestionnaire.actualiser({ tirer: true, interagir: false });
+    avancer(delaiPredit());
+    const séquenceLancée = gestionnaire.lireEtat().sequence;
+    expect(séquenceLancée).toBeGreaterThan(0);
+
+    // Pause / perte de focus : la séquence locale est remise à zéro.
+    gestionnaire.reinitialiser();
+    expect(gestionnaire.lireEtat().sequence).toBe(0);
+
+    // Le serveur pousse alors une ancienne séquence : elle ne doit pas
+    // réactiver une pêche déjà clôturée.
+    const ancienne = {
+      ...gestionnaire.lireEtat().peche,
+      phase: 'morsure' as const,
+      sequence: séquenceLancée,
+      tempsCourantMs: faux.maintenant() + 100,
+    };
+    expect(() => gestionnaire.recevoirEtatServeur(ancienne)).not.toThrow();
+    expect(gestionnaire.lireEtat().vue).toBe('rangee');
+    expect(gestionnaire.lireEtat().sequence).toBe(0);
   });
 
   it('applique un état serveur de morsure valide via recevoirEtatServeur', () => {

@@ -29,9 +29,11 @@ export interface InterfacePeche {
 }
 
 /**
- * Adaptateur autoritaire de pêche. En production le contrôleur passe par
- * `AdaptateurPecheCoeurJeu` (règles déterministes de #32) ; une fixture E2E
- * peut le remplacer pour piloter les états sans décider d'une prise locale.
+ * Adaptateur autoritaire de pêche. Le contrôleur est branché sur un adaptateur
+ * injecté : en production il passe par `AdaptateurPecheNeutre` (aucune morsure
+ * ni prise déduite par le client ; l'autorité revient au serveur dans une issue
+ * ultérieure), tandis qu'une fixture de test ou E2E peut le remplacer pour
+ * piloter les états via les règles déterministes de #32.
  */
 export interface AdaptateurPeche {
   lancer(etat: EtatPeche, zoneId: string, graine: string, sequence: number, temps: number): EtatPeche;
@@ -310,11 +312,18 @@ export class GestionnaireCanne {
 
   /**
    * Applique un état de pêche poussé par une autorité externe (serveur dans une
-   * issue ultérieure). Un état obsolète (séquence antérieure, ou même séquence
-   * avec un temps antérieur) est ignoré sans régression ni erreur.
+   * issue ultérieure). Un état obsolète — séquence antérieure, séquence déjà
+   * clôturée (annulée, relevée ou remise à zéro), ou même séquence avec un temps
+   * antérieur — est ignoré sans régression ni erreur.
    */
   public recevoirEtatServeur(etat: EtatPeche): void {
     const courant = this.etat.peche;
+    // Une séquence clôturée (inactive après réinitialisation, terminee après
+    // annulation ou relevé) ne doit jamais être régressée par une réponse
+    // serveur ultérieure, quel que soit son horodatage.
+    if (courant.phase === 'inactive' || courant.phase === 'terminee') {
+      return;
+    }
     const obsolète =
       etat.sequence < courant.sequence ||
       (etat.sequence === courant.sequence && etat.tempsCourantMs < courant.tempsCourantMs);
