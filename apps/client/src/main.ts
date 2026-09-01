@@ -17,10 +17,16 @@ import { estReponseSante, type OptionsConnexion } from '@pirate/protocole';
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
 import { construireGalerieBateauxPiratesE2E } from './jeu/bateau-pirate';
 import { ACTIONS_JEU, creerEtatActions, GestionnaireEntrees, type ActionJeu } from './jeu/entrees';
+import { installerEtiquettesPecheurs } from './jeu/etiquette-pecheur';
 import { construireBacASable } from './jeu/monde-test';
 import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
 import { construireGaleriePiratesE2E } from './jeu/pirate';
 import { PistoletPremierePersonne } from './jeu/pistolet';
+import {
+  creerEmetteurTransformation,
+  SynchroniseurPecheursDistants,
+  type EmetteurTransformation,
+} from './jeu/synchroniseur-pecheurs';
 import {
   construireMondeBabylon,
   estModePresentationBateau,
@@ -82,6 +88,15 @@ const LARGEUR_REFERENCE = 1280;
 const HAUTEUR_REFERENCE = 720;
 const HAUTEUR_YEUX = 1.62;
 const POSITION_DEPART = { x: 0, y: 0, z: -6.5 } as const;
+
+function normaliserAngle(angle: number): number {
+  if (!Number.isFinite(angle)) {
+    return 0;
+  }
+  const deuxPi = Math.PI * 2;
+  const normalisé = ((angle + Math.PI) % deuxPi + deuxPi) % deuxPi - Math.PI;
+  return normalisé === -Math.PI ? Math.PI : normalisé;
+}
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene-canvas');
 const application = document.querySelector<HTMLElement>('#app');
@@ -438,6 +453,18 @@ interface EtatJeuE2E {
   };
 }
 
+interface EtatPecheurE2E {
+  readonly sessionId: string;
+  readonly nom: string;
+  readonly position: { readonly x: number; readonly y: number; readonly z: number };
+}
+
+interface EtatHarnessPecheurs {
+  readonly salleId: string | undefined;
+  readonly sessionId: string | undefined;
+  readonly pêcheursDistants: readonly EtatPecheurE2E[];
+}
+
 declare global {
   interface Window {
     __pirateIslandsE2E?: {
@@ -452,6 +479,7 @@ declare global {
       afficherInstantViseurIa?: (instant: number) => void;
       forcerEtatCanne?: (vue: string) => void;
       lireEtatCanne?: () => { readonly modeActif: boolean; readonly vue: string };
+      lireEtatPecheurs?: () => EtatHarnessPecheurs;
       /** Émet une intention de tir réseau vers le serveur (mode salle). */
       tirerReseau?: (cibleId?: string) => void;
       /** Émet une intention de tir volontairement dans le vide (mode salle). */
@@ -491,6 +519,7 @@ const modeBateauxPirates = modeE2E && paramètres.get('vue') === 'bateaux-pirate
 const animationBateauxPirates = modeBateauxPirates && paramètres.get('animation') === '1';
 const structureBateauxPirates = modeBateauxPirates && paramètres.get('structure') === '1';
 const modeViseurIa = modeE2E && paramètres.get('vue') === 'ia';
+const modePecheursDistants = modeE2E && paramètres.get('vue') === 'pecheurs';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
@@ -522,6 +551,8 @@ conteneurApplication.dataset.mode = modeBateauxPirates
   ? 'bateaux-pirates'
   : modeViseurIa
     ? 'ia'
+  : modePecheursDistants
+    ? 'pecheurs-distants'
   : modePirates
     ? 'pirates'
   : modePresentationCanne
@@ -546,6 +577,8 @@ conteneurApplication.dataset.vue = modeBateauxPirates
   ? 'bateaux-pirates'
   : modeViseurIa
     ? 'ia'
+  : modePecheursDistants
+    ? 'pecheurs'
   : modePirates
     ? 'pirates'
     : 'standard';
@@ -553,7 +586,11 @@ conteneurApplication.dataset.structure =
   structureBateauxPirates || structurePirates ? 'oui' : 'non';
 conteneurApplication.dataset.iles = String(monde.iles.length);
 conteneurApplication.dataset.diagnostics =
-  modeBateauxPirates || modeViseurIa || modePirates || (modeMonde && modeE2E)
+  modeBateauxPirates ||
+  modeViseurIa ||
+  modePecheursDistants ||
+  modePirates ||
+  (modeMonde && modeE2E)
     ? 'actifs'
     : 'inactifs';
 conteneurApplication.dataset.pause = 'non';
@@ -565,6 +602,16 @@ if (modeViseurIa) {
     .querySelector<HTMLElement>('.eyebrow')
     ?.replaceChildren('Harnais visuel E2E · MVP-2G');
   document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('IA pirate');
+} else if (modePecheursDistants) {
+  document
+    .querySelector<HTMLElement>('.eyebrow')
+    ?.replaceChildren('Harnais visuel E2E · MVP-3A');
+  document
+    .querySelector<HTMLElement>('#titre-jeu')
+    ?.replaceChildren('Pêcheurs distants synchronisés');
+  document
+    .querySelector<HTMLElement>('.tagline')
+    ?.replaceChildren('Deux fenêtres partagent la même salle : le second pêcheur apparaît et bouge chez le premier.');
 } else if (modePirates) {
   document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Galerie de rendu · MVP-2F');
   document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('Pirates terrestres');
@@ -892,7 +939,7 @@ function construireScene(): JeuClient | undefined {
       };
     }
 
-    if (modeMonde) {
+    if (modeMonde && !modePecheursDistants) {
       const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
       const retirerMarqueurs =
         modeE2E && !présentationBateau
@@ -1156,6 +1203,23 @@ function construireScene(): JeuClient | undefined {
           pistolet.reinitialiser(tempsTir);
           actualiserInterface();
         },
+        lireEtatPecheurs: () => {
+          const salle = connecteurPanneau?.lireSalle();
+          return {
+            salleId: connecteurPanneau?.salleId,
+            sessionId: salle?.sessionId,
+            pêcheursDistants: (
+              synchroniseurPecheurs?.obtenirPecheurs() ?? []
+            ).map((pecheur) => {
+              const etat = pecheur.obtenirEtat().transformation;
+              return {
+                sessionId: pecheur.sessionId,
+                nom: pecheur.nom,
+                position: { ...etat.position },
+              };
+            }),
+          };
+        },
       };
     };
 
@@ -1168,11 +1232,50 @@ function construireScene(): JeuClient | undefined {
     crochetE2E();
     actualiserInterface();
 
+    let synchroniseurPecheurs: SynchroniseurPecheursDistants | undefined;
+    let emetteurTransformation: EmetteurTransformation | undefined;
+    let retirerEtiquettesPecheurs: (() => void) | undefined;
+
+    const assurerSynchronisationPecheurs = (): void => {
+      const salle = connecteurPanneau?.lireSalle();
+      if (!salle || synchroniseurPecheurs || retirerEtiquettesPecheurs) {
+        return;
+      }
+
+      synchroniseurPecheurs = new SynchroniseurPecheursDistants(
+        () => connecteurPanneau?.lireSalle(),
+        () => connecteurPanneau?.lireSalle()?.sessionId ?? '',
+        scene,
+      );
+      emetteurTransformation = creerEmetteurTransformation(
+        () => connecteurPanneau?.lireSalle(),
+      );
+      retirerEtiquettesPecheurs = installerEtiquettesPecheurs(
+        () =>
+          (synchroniseurPecheurs?.obtenirPecheurs() ?? []).map((pecheur) => {
+            const etat = pecheur.obtenirEtat().transformation;
+            return {
+              position: {
+                x: etat.position.x,
+                y: etat.position.y + 2.6,
+                z: etat.position.z,
+              },
+              nom: pecheur.nom,
+              sessionId: pecheur.sessionId,
+            };
+          }),
+        scene,
+        cameraBabylon,
+      ).retirer;
+    };
+
     let dernierTemps = performance.now();
     const boucle = (): void => {
       const maintenant = performance.now();
       const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
       dernierTemps = maintenant;
+
+      assurerSynchronisationPecheurs();
 
       if (verrouillageE2EForce && !enPause && !entrees.estPointeurVerrouille()) {
         entrees.simulerVerrouillage(true);
@@ -1219,11 +1322,27 @@ function construireScene(): JeuClient | undefined {
           y: joueur.position.y + HAUTEUR_YEUX,
           z: joueur.position.z,
         });
+        if (emetteurTransformation) {
+          const regard = camera.obtenirEtat();
+          emetteurTransformation?.envoyer({
+            position: joueur.position,
+            lacet: normaliserAngle(regard.lacet),
+            tangage: normaliserAngle(regard.tangage),
+            roulis: 0,
+          });
+        }
       } else {
         tempsSimulationAccumule = 0;
         modePeche?.reinitialiser();
         gestionnaireTir.actualiser(false, tempsTir);
         pistolet.actualiser(tempsTir);
+      }
+
+      if (synchroniseurPecheurs) {
+        synchroniseurPecheurs?.mettreAJour();
+        for (const pecheur of synchroniseurPecheurs?.obtenirPecheurs() ?? []) {
+          pecheur.mettreAJour(deltaSecondes);
+        }
       }
 
       actualiserInterface();
@@ -1240,6 +1359,8 @@ function construireScene(): JeuClient | undefined {
     const jeu: JeuClient = {
       moteur,
       detruire: () => {
+        retirerEtiquettesPecheurs?.();
+        synchroniseurPecheurs?.liberer();
         entrees.detacher();
         window.removeEventListener('resize', redimensionner);
         moteur.stopRenderLoop(boucle);
@@ -1380,11 +1501,23 @@ const afficherPanneau =
   !modePirates &&
   !modeDiagnosticSalle &&
   !modeMonde &&
-  (modePanneauE2E || !modeE2E);
+  (modePanneauE2E || modePecheursDistants || !modeE2E);
 
 if (afficherPanneau) {
   champNomElement.value = genererNomPecheur();
   afficherPanneauAccueil();
+}
+
+if (modePecheursDistants) {
+  const nomE2E = paramètres.get('nom')?.trim();
+  const salleE2E = paramètres.get('room')?.trim();
+  if (nomE2E) {
+    champNomElement.value = nomE2E;
+  }
+  if (salleE2E) {
+    champSalleElement.value = salleE2E;
+  }
+  void rejoindreSalle();
 }
 
 if (modeDiagnosticSalle) {
