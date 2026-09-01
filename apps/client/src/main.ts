@@ -27,6 +27,7 @@ import {
   SynchroniseurPecheursDistants,
   type EmetteurTransformation,
 } from './jeu/synchroniseur-pecheurs';
+import { SynchroniseurPirates } from './jeu/synchroniseur-pirates';
 import {
   construireMondeBabylon,
   estModePresentationBateau,
@@ -488,6 +489,16 @@ declare global {
       rejouerTir?: () => void;
       /** Inflige des dégâts au joueur via le mannequin E2E serveur. */
       infligerDegatsE2E?: (degats: number) => void;
+      /** Positionne le joueur sur une île via le mannequin E2E serveur. */
+      positionnerJoueurE2E?: (position: { x: number; y: number; z: number }) => void;
+      /** Lit l’état autoritaire des pirates observé par ce client. */
+      lirePirates?: () => readonly {
+        readonly identifiant: string;
+        readonly sante: number;
+        readonly vivant: boolean;
+        readonly statut: string;
+        readonly position: { readonly x: number; readonly y: number; readonly z: number };
+      }[];
       /** Lit l'état de combat observé après synchronisation serveur. */
       lireCombat?: () => {
         readonly cibleId: string | null;
@@ -655,6 +666,9 @@ if (présentationBateau) {
 
 canvasJeu.width = LARGEUR_REFERENCE;
 canvasJeu.height = HAUTEUR_REFERENCE;
+
+let diagnosticSalleConnecte: DiagnosticSalleConnecte | undefined;
+let connecteurPanneau: ConnecteurConnexion | undefined;
 
 function construireScene(): JeuClient | undefined {
   if (modeViseurIa) {
@@ -945,6 +959,7 @@ function construireScene(): JeuClient | undefined {
         modeE2E && !présentationBateau
           ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
           : undefined;
+      let synchroniseurPirates: SynchroniseurPirates | undefined;
 
       scene.executeWhenReady(() => {
         conteneurApplication.dataset.bateau = mondeBabylon.bateau.descripteur.id;
@@ -958,7 +973,24 @@ function construireScene(): JeuClient | undefined {
         );
         conteneurApplication.dataset.scene = 'ready';
       });
-      const boucle = (): void => scene.render();
+      let dernierTempsMonde = performance.now();
+      const boucle = (): void => {
+        const maintenant = performance.now();
+        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTempsMonde) / 1000));
+        dernierTempsMonde = maintenant;
+        const salle = modeDiagnosticSalle ? diagnosticSalleConnecte?.salle : undefined;
+        if (salle) {
+          synchroniseurPirates ??= new SynchroniseurPirates(
+            () => diagnosticSalleConnecte?.salle,
+            scene,
+          );
+          synchroniseurPirates.mettreAJour();
+          for (const pirate of synchroniseurPirates.obtenirPirates()) {
+            pirate.mettreAJour(deltaSecondes);
+          }
+        }
+        scene.render();
+      };
       moteur.runRenderLoop(boucle);
       const redimensionner = (): void => moteur.resize();
       window.addEventListener('resize', redimensionner);
@@ -967,6 +999,7 @@ function construireScene(): JeuClient | undefined {
         moteur,
         detruire: () => {
           retirerMarqueurs?.();
+          synchroniseurPirates?.liberer();
           window.removeEventListener('resize', redimensionner);
           moteur.stopRenderLoop(boucle);
           mondeBabylon.liberer();
@@ -1383,10 +1416,6 @@ function construireScene(): JeuClient | undefined {
 
 const jeu = construireScene();
 
-let diagnosticSalleConnecte: DiagnosticSalleConnecte | undefined;
-
-let connecteurPanneau: ConnecteurConnexion | undefined;
-
 function actualiserStatutPanneau(etat: EtatConnexion, message?: string): void {
   statutConnexionElement.dataset.etat = etat;
   messageConnexionElement.textContent =
@@ -1562,6 +1591,8 @@ if (modeDiagnosticSalle) {
           tirerDansLeVide: connexion.tirerDansLeVide,
           rejouerTir: connexion.rejouerDernierTir,
           infligerDegatsE2E: connexion.infligerDegatsE2E,
+          positionnerJoueurE2E: connexion.positionnerJoueurE2E,
+          lirePirates: connexion.lirePirates,
           lireCombat: connexion.lireCombat,
           lireDeconnexion: connexion.lireDeconnexion,
         };

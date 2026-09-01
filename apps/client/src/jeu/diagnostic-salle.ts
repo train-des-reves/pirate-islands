@@ -8,6 +8,7 @@ import {
   type Joueur,
   type MessageDegatsE2E,
   type MessageIntentionTir,
+  type MessagePositionE2E,
   type MessageResultatTir,
   type OptionsConnexion,
 } from '@pirate/protocole';
@@ -48,11 +49,23 @@ export interface DiagnosticSalleConnecte {
   readonly rejouerDernierTir: () => void;
   /** Appelle le mannequin E2E serveur réservé aux tests. */
   readonly infligerDegatsE2E: (degats: number) => void;
+  /** Positionne le joueur sur une île, uniquement dans le serveur E2E. */
+  readonly positionnerJoueurE2E: (position: { x: number; y: number; z: number }) => void;
+  /** Lit les pirates synchronisés depuis l’état serveur. */
+  readonly lirePirates: () => readonly EtatPirateDiagnostic[];
   /** Lit l'état de combat réel observé après la dernière synchronisation réseau. */
   readonly lireCombat: () => EtatCombatDiagnostic;
   /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
   readonly lireDeconnexion: () => number | undefined;
   readonly detruire: () => void;
+}
+
+export interface EtatPirateDiagnostic {
+  readonly identifiant: string;
+  readonly sante: number;
+  readonly vivant: boolean;
+  readonly statut: string;
+  readonly position: { readonly x: number; readonly y: number; readonly z: number };
 }
 
 const HAUTEUR_YEUX_DIAGNOSTIC = 1.62;
@@ -294,6 +307,25 @@ export async function connecterDiagnosticSalle(
       const message: MessageDegatsE2E = { degats };
       salleTypée.send(NOMS_MESSAGES.degatsE2E, message);
     },
+    positionnerJoueurE2E: (position) => {
+      if (détruite) {
+        return;
+      }
+      const message: MessagePositionE2E = { position: { ...position } };
+      salleTypée.send(NOMS_MESSAGES.positionE2E, message);
+    },
+    lirePirates: () =>
+      [...salleTypée.state.pirates.values()].map((pirate) => ({
+        identifiant: pirate.identifiant,
+        sante: pirate.sante,
+        vivant: pirate.vivant,
+        statut: pirate.statut,
+        position: {
+          x: pirate.transformation.x,
+          y: pirate.transformation.y,
+          z: pirate.transformation.z,
+        },
+      })),
     lireCombat: () => ({
       cibleId: etatCombat.cibleId,
       santeJoueur: etatCombat.santeJoueur,

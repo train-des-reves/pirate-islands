@@ -7,6 +7,7 @@ export const NOMS_MESSAGES = Object.freeze({
   intentionTir: 'jeu:intention-tir',
   resultatTir: 'jeu:resultat-tir',
   degatsE2E: 'jeu:e2e-degats',
+  positionE2E: 'jeu:e2e-position',
 } as const);
 
 export type NomMessage = (typeof NOMS_MESSAGES)[keyof typeof NOMS_MESSAGES];
@@ -57,4 +58,9 @@ export interface MessageResultatTir {
 /** Message E2E réservé au mode de test : inflige des dégâts à un joueur. */
 export interface MessageDegatsE2E {
   readonly degats: number;
+}
+
+/** Positionnement réservé au harnais E2E, jamais activé en production. */
+export interface MessagePositionE2E {
+  readonly position: PositionJoueur;
 }

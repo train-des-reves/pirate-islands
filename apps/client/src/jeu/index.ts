@@ -7,4 +7,5 @@ export * from './pecheur';
 export * from './pirate';
 export * from './pistolet';
 export * from './synchroniseur-pecheurs';
+export * from './synchroniseur-pirates';
 export * from './tir';

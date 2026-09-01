@@ -14,6 +14,7 @@ import {
   type MessageDegatsE2E,
   type MessageIntentionTir,
   type MessagePing,
+  type MessagePositionE2E,
   type MessagePong,
   type MessageResultatTir,
   type MessageTransformationJoueur,
@@ -21,6 +22,7 @@ import {
   validerMessageDegatsE2E,
   validerMessageIntentionTir,
   validerMessagePing,
+  validerMessagePositionE2E,
   validerMessageTransformationJoueur,
   validerOptionsConnexion,
   VITESSE_MAXIMALE_JOUEUR,
@@ -28,13 +30,19 @@ import {
 import {
   DELAI_REAPPARITION_JOUEUR_MS,
   DEGATS_PAR_TIR_PIRATE,
+  MachineEtatPirate,
+  PROFIL_TERRE,
   appliquerDegatsJoueur,
   appliquerDegatsPirate,
   choisirReapparition,
   genererMonde,
+  pointDansCollisionIle,
   reinitialiserJoueurReapparu,
   reapparitionDue,
   resoudreCibleTiree,
+  type CiblePerçue,
+  type DescripteurIle,
+  type SortieIaPirate,
   validerIntentionServeur,
 } from '@pirate/coeur-jeu';
 import { Room, type AuthContext, type Client } from '@colyseus/core';
@@ -46,6 +54,7 @@ interface MessagesSalle {
   [NOMS_MESSAGES.intentionTir]: MessageIntentionTir;
   [NOMS_MESSAGES.resultatTir]: MessageResultatTir;
   [NOMS_MESSAGES.degatsE2E]: MessageDegatsE2E;
+  [NOMS_MESSAGES.positionE2E]: MessagePositionE2E;
 }
 
 /** Données joueur privées conservées côté serveur, jamais dévoilées au client. */
@@ -71,6 +80,8 @@ type ClientSalle = Client<{
 
 const CODE_MESSAGE_INVALIDE = 4003;
 const CODE_MESSAGE_INCONNU = 4004;
+export const PAS_SIMULATION_PIRATES_MS = 50;
+const PAS_SIMULATION_PIRATES_SEC = PAS_SIMULATION_PIRATES_MS / 1000;
 
 function vitesseManifestementImpossible(
   précédente: DerniereTransformation,
@@ -94,6 +105,16 @@ function vitesseManifestementImpossible(
   return vitesse > VITESSE_MAXIMALE_JOUEUR;
 }
 
+function joueurDansIle(ile: DescripteurIle, joueur: Joueur): boolean {
+  // La transformation d’un joueur est portée à hauteur du sol pour tester la
+  // surface horizontale, même pendant les anciennes apparitions à y = 0.
+  return pointDansCollisionIle(ile, {
+    x: joueur.transformation.x,
+    y: ile.collision.hauteurSurface,
+    z: joueur.transformation.z,
+  });
+}
+
 let modeE2EServeurActif = false;
 
 /** Active le mannequin E2E depuis le démarrage serveur, hors de portée du client. */
@@ -110,6 +131,8 @@ export class SalleJeu extends Room<{
 
   private prochainIndexApparition = 0;
   private readonly dernièresTransformations = new Map<string, DerniereTransformation>();
+  private readonly machinesPirates = new Map<string, MachineEtatPirate>();
+  private readonly ilesPirates = new Map<string, DescripteurIle>();
   private monde: ReturnType<typeof genererMonde> = genererMonde();
   private modeE2E = false;
 
@@ -135,6 +158,7 @@ export class SalleJeu extends Room<{
 
     this.monde = genererMonde(this.state.metadonnees.graine);
     this.peuplerPirates();
+    this.setSimulationInterval(() => this.actualiserSimulationPirates(), PAS_SIMULATION_PIRATES_MS);
 
     this.onMessage('*', (client, type, message) => {
       this.traiterMessage(client, type, message);
@@ -209,8 +233,166 @@ export class SalleJeu extends Room<{
         pirate.transformation.lacet = 0;
         pirate.statut = 'patrouille';
         this.state.pirates.set(pirate.identifiant, pirate);
+        this.ilesPirates.set(pirate.identifiant, ile);
+        this.machinesPirates.set(
+          pirate.identifiant,
+          new MachineEtatPirate({
+            graine: this.monde.graine + ':' + pirate.identifiant,
+            profil: {
+              ...PROFIL_TERRE,
+              pointAncrage: {
+                x: ile.transformation.position.x,
+                z: ile.transformation.position.z,
+              },
+            },
+            positionDepart: {
+              x: apparition.position.x,
+              z: apparition.position.z,
+            },
+            limites: {
+              largeur: ile.rayonX * 2,
+              profondeur: ile.rayonZ * 2,
+              rayonTerrestreMax: Math.min(ile.rayonX, ile.rayonZ) * 0.78,
+              centre: {
+                x: ile.collision.centre.x,
+                z: ile.collision.centre.z,
+              },
+              rayonX: ile.rayonX * 0.78,
+              rayonZ: ile.rayonZ * 0.78,
+              rotationY: ile.collision.rotationY,
+            },
+          }),
+        );
       }
     }
+  }
+
+  /** Avance toutes les machines d’IA sur un pas fixe et applique leurs sorties. */
+  private actualiserSimulationPirates(): void {
+    for (const pirate of this.state.pirates.values()) {
+      const machine = this.machinesPirates.get(pirate.identifiant);
+      const ile = this.ilesPirates.get(pirate.identifiant);
+      if (!machine || !ile) {
+        continue;
+      }
+
+      if (!pirate.vivant) {
+        machine.tuer();
+      }
+
+      const cible = pirate.vivant
+        ? this.trouverCiblePirate(ile, machine.lirePosition())
+        : undefined;
+      const sortie = machine.actualiser(PAS_SIMULATION_PIRATES_SEC, cible);
+      this.appliquerSortiePirate(pirate.identifiant, sortie);
+
+      if (sortie.intentionAttaque) {
+        this.appliquerAttaquePirate(pirate.identifiant, sortie);
+      }
+    }
+  }
+
+  private trouverCiblePirate(
+    ile: DescripteurIle,
+    positionPirate: { readonly x: number; readonly z: number },
+  ): CiblePerçue | undefined {
+    let meilleure: CiblePerçue | undefined;
+    let meilleureDistance = Number.POSITIVE_INFINITY;
+
+    for (const joueur of this.state.joueurs.values()) {
+      if (!joueur.vivant || !joueurDansIle(ile, joueur)) {
+        continue;
+      }
+
+      const distance = Math.hypot(
+        joueur.transformation.x - positionPirate.x,
+        joueur.transformation.z - positionPirate.z,
+      );
+      if (distance < meilleureDistance) {
+        meilleureDistance = distance;
+        meilleure = {
+          id: joueur.sessionId,
+          position: {
+            x: joueur.transformation.x,
+            z: joueur.transformation.z,
+          },
+        };
+      }
+    }
+
+    return meilleure;
+  }
+
+  private appliquerSortiePirate(identifiant: string, sortie: SortieIaPirate): void {
+    const pirate = this.state.pirates.get(identifiant);
+    if (!pirate) {
+      return;
+    }
+
+    pirate.transformation.x = sortie.position.x;
+    pirate.transformation.z = sortie.position.z;
+    pirate.transformation.lacet = sortie.cap;
+    pirate.statut = sortie.etat;
+    pirate.vivant = sortie.etat !== 'mort';
+  }
+
+  private appliquerAttaquePirate(identifiant: string, sortie: SortieIaPirate): void {
+    const intention = sortie.intentionAttaque;
+    if (!intention) {
+      return;
+    }
+
+    const pirate = this.state.pirates.get(identifiant);
+    const joueur = this.state.joueurs.get(intention.cible);
+    if (
+      !pirate ||
+      !joueur ||
+      !joueur.vivant ||
+      !this.ileDuPirateContientJoueur(identifiant, joueur)
+    ) {
+      return;
+    }
+
+    const distance = Math.hypot(
+      joueur.transformation.x - pirate.transformation.x,
+      joueur.transformation.z - pirate.transformation.z,
+    );
+    if (distance > intention.portee) {
+      return;
+    }
+
+    const après = appliquerDegatsJoueur(
+      {
+        sessionId: joueur.sessionId,
+        sante: joueur.sante,
+        vivant: joueur.vivant,
+      },
+      DEGATS_PAR_TIR_PIRATE,
+    );
+    joueur.sante = après.sante;
+    joueur.vivant = après.vivant;
+    joueur.statut = après.vivant ? 'actif' : 'mort';
+
+    if (!après.vivant) {
+      const client = this.clients.find((entrée) => entrée.sessionId === joueur.sessionId);
+      if (client) {
+        const données: DonneesClientSalle = client.userData ?? {
+          indexApparition: 0,
+          dernierTirMs: 0,
+          derniereSequence: 0,
+          prochaineReapparitionMs: 0,
+        };
+        client.userData = {
+          ...données,
+          prochaineReapparitionMs: Date.now() + DELAI_REAPPARITION_JOUEUR_MS,
+        };
+      }
+    }
+  }
+
+  private ileDuPirateContientJoueur(identifiant: string, joueur: Joueur): boolean {
+    const ile = this.ilesPirates.get(identifiant);
+    return ile ? joueurDansIle(ile, joueur) : false;
   }
 
   private traiterMessage(client: ClientSalle, type: string | number, message: unknown): void {
@@ -231,6 +413,11 @@ export class SalleJeu extends Room<{
 
     if (type === NOMS_MESSAGES.degatsE2E) {
       this.traiterDegatsE2E(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.positionE2E) {
+      this.traiterPositionE2E(client, message);
       return;
     }
 
@@ -486,6 +673,53 @@ export class SalleJeu extends Room<{
         prochaineReapparitionMs: maintenant + DELAI_REAPPARITION_JOUEUR_MS,
       };
     }
+  }
+
+  /** Positionne le mannequin sur une île pour les scénarios E2E déterministes. */
+  private traiterPositionE2E(client: ClientSalle, message: unknown): void {
+    if (!this.modeE2E) {
+      this.rejeterMessage(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Le message E2E de position n’est pas autorisé.',
+      );
+      return;
+    }
+
+    const validation = validerMessagePositionE2E(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+
+    const joueur = this.state.joueurs.get(client.sessionId);
+    if (!joueur) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le joueur est inconnu.');
+      return;
+    }
+
+    const position = validation.valeur.position;
+    const surUneIle = this.monde.iles.some((ile) =>
+      pointDansCollisionIle(ile, {
+        x: position.x,
+        y: ile.collision.hauteurSurface,
+        z: position.z,
+      }),
+    );
+    if (!surUneIle) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'La position E2E doit être sur une île.');
+      return;
+    }
+
+    joueur.transformation.x = position.x;
+    joueur.transformation.y = position.y;
+    joueur.transformation.z = position.z;
+    this.dernièresTransformations.set(client.sessionId, {
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      horodatage: Date.now(),
+    });
   }
 
   /**

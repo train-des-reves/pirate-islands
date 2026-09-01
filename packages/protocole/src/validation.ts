@@ -2,6 +2,7 @@ import type {
   MessageDegatsE2E,
   MessageIntentionTir,
   MessagePing,
+  MessagePositionE2E,
   MessageTransformationJoueur,
 } from './messages.js';
 import { SANTE_JOUEUR_MAXIMALE } from './schemas.js';
@@ -117,9 +118,7 @@ function estNombreBorné(valeur: unknown, maximum: number): valeur is number {
 
 function estAngleBorné(valeur: unknown): valeur is number {
   return (
-    typeof valeur === 'number' &&
-    Number.isFinite(valeur) &&
-    Math.abs(valeur) <= Math.PI * 2 + 0.001
+    typeof valeur === 'number' && Number.isFinite(valeur) && Math.abs(valeur) <= Math.PI * 2 + 0.001
   );
 }
 
@@ -161,7 +160,11 @@ export function validerMessageTransformationJoueur(
     return resultatErreur('La position de la transformation de joueur est invalide.');
   }
 
-  if (!estAngleBorné(valeur.lacet) || !estAngleBorné(valeur.tangage) || !estAngleBorné(valeur.roulis)) {
+  if (
+    !estAngleBorné(valeur.lacet) ||
+    !estAngleBorné(valeur.tangage) ||
+    !estAngleBorné(valeur.roulis)
+  ) {
     return resultatErreur('Les angles de la transformation de joueur sont invalides.');
   }
 
@@ -172,7 +175,9 @@ export function validerMessageTransformationJoueur(
     valeur.horodatage < 0 ||
     valeur.horodatage > LIMITE_HORODATAGE
   ) {
-    return resultatErreur('L’horodatage de la transformation de joueur est invalide ou trop grand.');
+    return resultatErreur(
+      'L’horodatage de la transformation de joueur est invalide ou trop grand.',
+    );
   }
 
   const position = valeur.position as MessageTransformationJoueur['position'];
@@ -195,11 +200,7 @@ export function estMessageTransformationJoueurValide(
 }
 
 function estNombreFiniBorne(valeur: unknown, borneAbsolue: number): valeur is number {
-  return (
-    typeof valeur === 'number' &&
-    Number.isFinite(valeur) &&
-    Math.abs(valeur) <= borneAbsolue
-  );
+  return typeof valeur === 'number' && Number.isFinite(valeur) && Math.abs(valeur) <= borneAbsolue;
 }
 
 /** Valide une intention de tir côté serveur, indépendamment du gameplay. */
@@ -261,11 +262,7 @@ export function validerMessageIntentionTir(
     return resultatErreur('La direction de l’intention de tir est invalide.');
   }
 
-  const longueurDirection = Math.hypot(
-    valeur.directionX,
-    valeur.directionY,
-    valeur.directionZ,
-  );
+  const longueurDirection = Math.hypot(valeur.directionX, valeur.directionY, valeur.directionZ);
   if (!(longueurDirection > Number.EPSILON)) {
     return resultatErreur('La direction de l’intention de tir est nulle.');
   }
@@ -294,9 +291,7 @@ export function validerMessageIntentionTir(
   };
 }
 
-export function estMessageIntentionTirValide(
-  valeur: unknown,
-): valeur is MessageIntentionTir {
+export function estMessageIntentionTirValide(valeur: unknown): valeur is MessageIntentionTir {
   return validerMessageIntentionTir(valeur).valide;
 }
 
@@ -320,6 +315,31 @@ export function validerMessageDegatsE2E(valeur: unknown): ResultatValidation<Mes
 
 export function estMessageDegatsE2EValide(valeur: unknown): valeur is MessageDegatsE2E {
   return validerMessageDegatsE2E(valeur).valide;
+}
+
+/** Valide la position du harnais E2E, sans l’ouvrir aux clients de production. */
+export function validerMessagePositionE2E(valeur: unknown): ResultatValidation<MessagePositionE2E> {
+  if (
+    !estObjetSimple(valeur) ||
+    !possedeUniquement(valeur, ['position']) ||
+    !('position' in valeur)
+  ) {
+    return resultatErreur('Le message E2E de position doit contenir uniquement position.');
+  }
+
+  if (!estPositionValide(valeur.position)) {
+    return resultatErreur('La position E2E est invalide.');
+  }
+
+  const position = valeur.position;
+  return {
+    valide: true,
+    valeur: { position: { x: position.x, y: position.y, z: position.z } },
+  };
+}
+
+export function estMessagePositionE2EValide(valeur: unknown): valeur is MessagePositionE2E {
+  return validerMessagePositionE2E(valeur).valide;
 }
 
 export function validerIdentifiantSalle(valeur: unknown): ResultatValidation<string> {
