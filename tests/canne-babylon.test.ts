@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { FreeCamera, NullEngine, Scene, Vector3 } from 'babylonjs';
 
+import { genererMonde } from '@pirate/coeur-jeu';
+
 import { construireCanneBabylon } from '../apps/client/src/jeu/canne-babylon';
+import { construireModePeche } from '../apps/client/src/jeu/mode-peche';
 
 describe('canne procédurale Babylon', () => {
   let moteur: NullEngine | undefined;
@@ -71,5 +74,36 @@ describe('canne procédurale Babylon', () => {
     canne.afficherEtat({ vue: 'prete', sequence: 0, peche: { phase: 'inactive', sequence: 0, lanceAuMs: 0, tempsCourantMs: 0 } });
     expect(scene.getMeshByName('canne-corps')?.isEnabled()).toBe(true);
     canne.liberer();
+  });
+
+  it('réinitialise le mode pêche via le chemin réel de pause/perte de focus', () => {
+    const { scene, camera } = creerScène();
+    const zone = genererMonde('peche-mvp-v1').zonesPeche[0];
+    if (!zone) {
+      throw new Error('Le monde doit exposer une zone de pêche.');
+    }
+    const modePeche = construireModePeche({
+      graine: 'peche-mvp-v1',
+      lirePosition: () => ({ x: zone.centre.x, y: zone.centre.y, z: zone.centre.z }),
+      lireHorodatage: () => 1_000,
+      camera,
+      scene,
+      interfacePeche: {
+        afficherInvite: () => undefined,
+        afficherStatut: () => undefined,
+        afficherResultat: () => undefined,
+      },
+    });
+    // Entre en mode pêche : la canne apparaît.
+    modePeche.actualiser({ tirer: false, interagir: true });
+    expect(modePeche.estModeActif()).toBe(true);
+    expect(scene.getMeshByName('canne-corps')?.isEnabled()).toBe(true);
+
+    // Pause / perte de focus : main.ts appelle modePeche.reinitialiser().
+    modePeche.reinitialiser();
+    expect(modePeche.estModeActif()).toBe(false);
+    expect(modePeche.lireEtat().vue).toBe('rangee');
+    expect(scene.getMeshByName('canne-corps')?.isEnabled()).toBe(false);
+    modePeche.liberer();
   });
 });
