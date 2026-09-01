@@ -11,3 +11,4 @@ playwright-report/
 docs/preuves/playwright-resultats/
 !docs/preuves/playwright-report/
 !docs/preuves/playwright-report/**
+docs/preuves/playwright-report/data/

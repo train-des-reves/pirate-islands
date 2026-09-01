@@ -8,5 +8,8 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../packages/protocole" }]
+  "references": [
+    { "path": "../../packages/protocole" },
+    { "path": "../../packages/coeur-jeu" }
+  ]
 }

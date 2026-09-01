@@ -31,6 +31,8 @@ export default defineConfig({
     command: 'pnpm dev',
     env: {
       VITE_E2E: '1',
+      SERVER_E2E: '1',
+      CI: 'true',
     },
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,

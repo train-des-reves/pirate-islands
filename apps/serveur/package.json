@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@pirate/protocole": "workspace:*",
+    "@pirate/coeur-jeu": "workspace:*",
     "@colyseus/core": "0.18.10",
     "@colyseus/schema": "5.0.25",
     "@colyseus/ws-transport": "0.18.2",
