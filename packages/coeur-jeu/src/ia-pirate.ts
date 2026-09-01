@@ -77,6 +77,8 @@ export interface ProfilIaPirate {
   readonly rayonHysteresis: number;
   readonly rayonPatrouille: number;
   readonly pointAncrage: Coordonnees;
+  /** Points suivis dans l'ordre pendant la patrouille maritime. */
+  readonly routePatrouille?: readonly Coordonnees[];
 }
 
 /** Limites terre/mer imposées aux déplacements. */
@@ -115,6 +117,7 @@ export class MachineEtatPirate {
   private temporisateurRetour = 0;
   private temporisateurAttaque = 0;
   private prochaineCiblePatrouille: Coordonnees;
+  private indexRoutePatrouille = 0;
   private ciblePerdue = false;
   private progressionTemporisation = 0;
   private sequence = 1;
@@ -135,6 +138,8 @@ export class MachineEtatPirate {
       this.profil.pointAncrage,
       this.profil.rayonPatrouille,
       this.limites,
+      this.profil.routePatrouille,
+      this.indexRoutePatrouille,
     );
   }
 
@@ -173,11 +178,14 @@ export class MachineEtatPirate {
     this.temporisateurPerte = 0;
     this.temporisateurRetour = 0;
     this.temporisateurAttaque = 0;
+    this.indexRoutePatrouille = 0;
     this.prochaineCiblePatrouille = choisirCiblePatrouille(
       this.aleatoire,
       this.profil.pointAncrage,
       this.profil.rayonPatrouille,
       this.limites,
+      this.profil.routePatrouille,
+      this.indexRoutePatrouille,
     );
     this.ciblePerdue = false;
     this.progressionTemporisation = 0;
@@ -255,11 +263,17 @@ export class MachineEtatPirate {
     );
 
     if (atteint) {
+      if (this.profil.routePatrouille && this.profil.routePatrouille.length > 0) {
+        this.indexRoutePatrouille =
+          (this.indexRoutePatrouille + 1) % this.profil.routePatrouille.length;
+      }
       this.prochaineCiblePatrouille = choisirCiblePatrouille(
         this.aleatoire,
         this.profil.pointAncrage,
         this.profil.rayonPatrouille,
         this.limites,
+        this.profil.routePatrouille,
+        this.indexRoutePatrouille,
       );
       this.capCible = angleVers(this.position, this.prochaineCiblePatrouille);
     }
@@ -537,7 +551,15 @@ function choisirCiblePatrouille(
   ancrage: Coordonnees,
   rayon: number,
   limites: LimitesZoneIaPirate,
+  route: readonly Coordonnees[] | undefined = undefined,
+  indexRoute = 0,
 ): Coordonnees {
+  if (route && route.length > 0) {
+    const point = route[Math.max(0, indexRoute) % route.length];
+    if (point) {
+      return bornerCoordonnees(point, limites);
+    }
+  }
   const cible = {
     x: ancrage.x + (aleatoire() * 2 - 1) * rayon,
     z: ancrage.z + (aleatoire() * 2 - 1) * rayon,

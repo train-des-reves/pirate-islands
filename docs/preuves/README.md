@@ -117,3 +117,24 @@ pnpm test:e2e -- e2e/peche.spec.ts
 URL déterministe : `http://127.0.0.1:4173/?e2e=1&presentation=regles-peche&graine=peche-mvp-v1`.
 
 La capture composite attendue est `docs/preuves/peche-regles-1280x720.png`.
+
+## Preuve de la rencontre maritime
+
+Commande exacte :
+
+```bash
+pnpm exec playwright test e2e/pirates-maritimes.spec.ts --workers=1
+```
+
+URL et graine déterministes :
+`http://127.0.0.1:4173/?e2e=1&vue=pirates-maritimes&graine=e2e-maritime`.
+Le second contexte rejoint la salle affichée par le premier via `room`.
+Le relecteur vérifie le sloop, ses deux pirates d’équipage, la route
+`route-maritime-1`, la poursuite et l’attaque côté serveur, puis la destruction
+et l’arrêt du sillage observés dans les deux contextes. Les captures sont
+`pirates-maritimes-patrouille-1280x720.png`,
+`pirates-maritimes-attaque-1280x720.png`,
+`pirates-maritimes-detruit-1280x720.png` et
+`pirates-maritimes-observateur-1280x720.png`. Le GIF de séquence
+`pirates-maritimes-e2e.gif` regroupe les vues patrouille, attaque et destruction
+en 1280×720.

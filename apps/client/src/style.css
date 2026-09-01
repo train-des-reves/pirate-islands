@@ -181,6 +181,27 @@ body {
   margin-top: 16px;
 }
 
+.scene-shell[data-mode='pirates-maritimes'] .interface {
+  width: min(calc(100% - 64px), 700px);
+  padding-top: 30px;
+  padding-left: 42px;
+  text-shadow: 0 2px 18px rgba(0, 15, 26, 0.52);
+}
+
+.scene-shell[data-mode='pirates-maritimes'] h1 {
+  max-width: 720px;
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+}
+
+.scene-shell[data-mode='pirates-maritimes'] .tagline {
+  max-width: 600px;
+}
+
+.scene-shell[data-mode='pirates-maritimes'] .diagnostic-salle {
+  border-color: rgba(112, 222, 245, 0.45);
+  background: rgba(3, 34, 51, 0.82);
+}
+
 .scene-shell[data-mode='ia'] .interface,
 .scene-shell[data-mode='ia'] .ath,
 .scene-shell[data-mode='ia'] .halo,

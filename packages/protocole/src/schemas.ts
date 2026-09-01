@@ -67,6 +67,20 @@ export const BateauSchema = schema(
 );
 export type Bateau = SchemaType<typeof BateauSchema>;
 
+export const BateauPirateSchema = schema(
+  {
+    identifiant: t.string().default(''),
+    transformation: TransformationSchema,
+    vitesse: t.number().default(0),
+    sante: t.uint16().default(SANTE_BATEAU_MAXIMALE),
+    actif: t.boolean().default(true),
+    statut: t.string().default('patrouille'),
+    routeId: t.string().default(''),
+  },
+  'BateauPirate',
+);
+export type BateauPirate = SchemaType<typeof BateauPirateSchema>;
+
 export const PirateSchema = schema(
   {
     identifiant: t.string().default(''),
@@ -87,6 +101,7 @@ export const EtatSalleSchema = schema(
     joueurs: t.map(JoueurSchema),
     bateaux: t.map(BateauSchema),
     pirates: t.map(PirateSchema),
+    bateauxPirates: t.map(BateauPirateSchema),
   },
   'EtatSalle',
 );
@@ -168,6 +183,22 @@ export function creerPirate(identifiant: string, indexApparition = 0): Pirate {
   });
 }
 
+export function creerBateauPirate(
+  identifiant: string,
+  position: { readonly x: number; readonly y: number; readonly z: number },
+  routeId = '',
+): BateauPirate {
+  return new BateauPirateSchema({
+    identifiant,
+    transformation: new TransformationSchema({ x: position.x, y: position.y, z: position.z }),
+    vitesse: 0,
+    sante: SANTE_BATEAU_MAXIMALE,
+    actif: true,
+    statut: 'patrouille',
+    routeId,
+  });
+}
+
 export function creerEtatSalle(options: {
   readonly identifiantSalle: string;
   readonly graine?: string;
@@ -181,6 +212,7 @@ export function creerEtatSalle(options: {
       capaciteMaximale: CAPACITE_SALLE,
     }),
     phase: 'attente',
+    bateauxPirates: {},
   });
 }
 
