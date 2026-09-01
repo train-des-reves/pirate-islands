@@ -387,8 +387,11 @@ export async function connecterDiagnosticSalle(
         y: zone.centre.y - origine.y,
         z: zone.centre.z - origine.z,
       });
+      // La séquence E2E est choisie avec un délai de morsure suffisamment
+      // large pour laisser le harnais capturer les deux fenêtres navigateur.
+      const sequencePeche = Math.max(sequence, 5);
       salleTypée.send(NOMS_MESSAGES.lancerPeche, {
-        sequence,
+        sequence: sequencePeche,
         zoneId: zone.id,
         origineX: origine.x,
         origineY: origine.y,
@@ -400,7 +403,7 @@ export async function connecterDiagnosticSalle(
         flotteurY: zone.centre.y,
         flotteurZ: zone.centre.z,
       });
-      sequence += 1;
+      sequence = sequencePeche + 1;
     },
     releverPeche: () => {
       const ligne = salleTypée.state.lignesPeche.get(salleTypée.sessionId);
