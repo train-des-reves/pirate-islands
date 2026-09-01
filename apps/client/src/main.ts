@@ -1006,20 +1006,59 @@ function construireScene(): JeuClient | undefined {
       camera.position.set(positionBateau.x, positionBateau.y + 4.5, positionBateau.z - 12);
       camera.setTarget(new Vector3(positionBateau.x, positionBateau.y + 1.4, positionBateau.z));
 
+      let enPausePilotage = false;
+      const mettreEnPausePilotage = (): void => {
+        enPausePilotage = true;
+        overlayPause.hidden = false;
+        conteneurApplication.dataset.pause = 'oui';
+        boutonReprendreJeu.focus();
+      };
+      const reprendrePilotage = (): void => {
+        enPausePilotage = false;
+        overlayPause.hidden = true;
+        conteneurApplication.dataset.pause = 'non';
+        boutonReprendreJeu.blur();
+        if (modeE2E) {
+          entreesPilotage.simulerVerrouillage(true);
+        } else {
+          try {
+            void Promise.resolve(canvasJeu.requestPointerLock?.()).catch(() => {
+              // Le reverrouillage peut être refusé tant que le pointeur n'est pas
+              // re-autorisé par le navigateur ; l'état de pause reste sûr.
+            });
+          } catch {
+            // Ignoré : la reprise se fera au prochain clic dans la scène.
+          }
+        }
+      };
+
       const entreesPilotage = new GestionnaireEntrees({
         cible: window,
         document: window.document,
         elementVerrouillage: canvasJeu,
         liaisons: construireLiaisonsEntrees(reglages.applique),
-        onChangementVerrouillage: () => undefined,
+        onChangementVerrouillage: (verrouille: boolean) => {
+          // Le clic dans la scène après pause reverrouille le pointeur et
+          // reprend la simulation.
+          if (verrouille && enPausePilotage) {
+            reprendrePilotage();
+          }
+        },
         onPause: () => {
-          // Échap quitte la barre et rend les contrôles à pied.
+          // Échap libère le pointeur, ouvre la pause et, si le joueur était à
+          // la barre, le rend à bord.
+          mettreEnPausePilotage();
           if (harnais.lireEtat().mode === 'pilote') {
             harnais.agir();
           }
         },
       });
       entreesPilotage.attacher();
+      reprendreJeuActif = reprendrePilotage;
+      rafraichirInterfaceJeu = () => {
+        conteneurApplication.dataset.pause = enPausePilotage ? 'oui' : 'non';
+        overlayPause.hidden = !enPausePilotage;
+      };
 
       if (modeE2E) {
         window.__pirateIslandsE2E = {
@@ -1030,7 +1069,7 @@ function construireScene(): JeuClient | undefined {
             return {
               position: etat.positionJoueur,
               camera: { lacet: 0, tangage: 0 },
-              pause: false,
+              pause: enPausePilotage,
               pointeurVerrouille: false,
               collision: 'aucune' as const,
               reglages: clonerReglagesPourLecture(reglages.applique),
@@ -1079,11 +1118,19 @@ function construireScene(): JeuClient | undefined {
         conteneurApplication.dataset.scene = 'ready';
       });
 
+      // Horloge de simulation propre au mode pilotage. En production, on
+      // accumule le temps réel pour que la simulation du bateau soit
+      // indépendante du nombre d'images ; en mode E2E, `avancerTemps` reste la
+      // seule source de progression.
+      let dernierTemps = performance.now();
       const observer = scene.onAfterRenderObservable.add(() => {
         const suivant = harnais.lireEtat();
         invite.mettreAJour(suivant);
       });
       const boucle = (): void => {
+        const maintenant = performance.now();
+        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
+        dernierTemps = maintenant;
         const actions = entreesPilotage.lireEtat();
         const transitions = entreesPilotage.lireTransitions();
         // « interagir » est une action transitoire : on ne déclenche la
@@ -1094,15 +1141,17 @@ function construireScene(): JeuClient | undefined {
           harnais.agir();
         }
         if (!modeE2E) {
-          harnais.boucle(
-            {
-              avancer: actions.avancer,
-              reculer: actions.reculer,
-              gauche: actions.gauche,
-              droite: actions.droite,
-            },
-            0.016,
-          );
+          if (!enPausePilotage) {
+            harnais.boucle(
+              {
+                avancer: actions.avancer,
+                reculer: actions.reculer,
+                gauche: actions.gauche,
+                droite: actions.droite,
+              },
+              deltaSecondes,
+            );
+          }
         }
         // La caméra suit le passager du bateau pour rendre la marée et la
         // cale visibles : derrière lui selon le lacet de la caméra.
@@ -1134,6 +1183,8 @@ function construireScene(): JeuClient | undefined {
           controle.liberer();
           mondeBabylon.liberer();
           moteur.dispose();
+          reprendreJeuActif = undefined;
+          rafraichirInterfaceJeu = undefined;
           if (modeE2E) {
             delete window.__pirateIslandsE2E;
           }

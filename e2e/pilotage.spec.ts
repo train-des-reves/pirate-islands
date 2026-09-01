@@ -15,6 +15,7 @@ interface EtatPilotageE2E {
 
 type CrochetPilotage = {
   lireEtat: () => {
+    readonly pause?: boolean;
     readonly pilotage?: EtatPilotageE2E;
   };
   reinitialiser: () => void;
@@ -180,4 +181,43 @@ test('embarque, prend la barre, navigue, heurte le rivage, sort de barre et déb
   await deplacerBord(page, { x: 0, z: 1.5 });
   await page.keyboard.press('KeyE');
   await attendreMode(page, 'pied');
+});
+
+test('Échap ouvre la pause à la barre et le bouton reprendre la relève', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/?e2e=1&graine=mvp-defaut&pilotage=1&temps=0');
+  await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
+  await verifierCrochet(page);
+
+  await page.evaluate(() => {
+    const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPilotage })
+      .__pirateIslandsE2E;
+    crochet?.reinitialiser();
+  });
+
+  // Montée à bord puis prise de la barre.
+  await page.keyboard.press('KeyE');
+  await attendreMode(page, 'bord');
+  await deplacerBord(page, { x: 0, z: 7.3 });
+  await page.keyboard.press('KeyE');
+  await attendreMode(page, 'pilote');
+
+  // Échap ouvre la pause : l'overlay est visible et l'application le reflète.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="pause-overlay"]')).toBeVisible();
+  await expect(page.locator('#app')).toHaveAttribute('data-pause', 'oui');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPilotage })
+          .__pirateIslandsE2E;
+        return Boolean(crochet?.lireEtat().pause);
+      }),
+    )
+    .toBe(true);
+
+  // Le bouton reprendre relève la pause.
+  await page.getByTestId('reprendre-jeu').click();
+  await expect(page.locator('[data-testid="pause-overlay"]')).toBeHidden();
+  await expect(page.locator('#app')).toHaveAttribute('data-pause', 'non');
 });
