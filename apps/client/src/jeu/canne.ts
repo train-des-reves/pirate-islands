@@ -352,8 +352,14 @@ export class GestionnaireCanne {
       return;
     }
     const suit = this.adaptateur.avancer(this.etat.peche, temps);
-    if (suit.tempsCourantMs < this.etat.peche.tempsCourantMs) {
-      // État serveur en retard : on ignore pour ne pas régresser.
+    // État serveur en retard ou obsolète : on ignore pour ne pas régresser.
+    // Un retour est obsolète s'il porte une séquence plus ancienne, ou la même
+    // séquence avec un temps courant antérieur.
+    if (
+      suit.sequence < this.etat.peche.sequence ||
+      (suit.sequence === this.etat.peche.sequence &&
+        suit.tempsCourantMs < this.etat.peche.tempsCourantMs)
+    ) {
       return;
     }
     if (suit.phase === 'morsure' && this.etat.vue !== 'morsure') {

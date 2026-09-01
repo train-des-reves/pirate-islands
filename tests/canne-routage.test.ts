@@ -6,6 +6,7 @@ import {
   construireAdaptateurPecheCoeurJeu,
   GestionnaireCanne,
 } from '../apps/client/src/jeu/canne';
+import { pistoletPeutTirer } from '../apps/client/src/jeu/mode-peche';
 import { GestionnaireTirLocal, type IntentionTir } from '../apps/client/src/jeu/tir';
 
 function zoneDeMonde(): ZonePeche {
@@ -107,10 +108,32 @@ describe('routage exclusif des actions tirer', () => {
     gestionnaireCanne.actualiser({ tirer: true, interagir: true });
     const modeActif = gestionnaireCanne.estModeActif();
     expect(modeActif).toBe(true);
-    if (!modeActif) {
+    // Le routage réel de production passe par `pistoletPeutTirer`.
+    const pistoletAutorisé = pistoletPeutTirer(modeActif);
+    if (pistoletAutorisé) {
       gestionnaireTir.actualiser(true, 500);
     }
     expect(intentions).toHaveLength(0);
     expect(gestionnaireTir.lireCompteur()).toBe(0);
+
+    // Hors mode, le même routage autorise le pistolet.
+    const autreCanne = new GestionnaireCanne({
+      lireZone: () => undefined,
+      lirePosition: () => ({ x: 0, y: 0, z: 0 }),
+      lireHorodatage: () => 500,
+      graine: 'peche-mvp-v1',
+      interfacePeche: {
+        afficherInvite: () => undefined,
+        afficherStatut: () => undefined,
+        afficherResultat: () => undefined,
+      },
+      adaptateur: construireAdaptateurPecheCoeurJeu(monde),
+    });
+    autreCanne.actualiser({ tirer: true, interagir: false });
+    expect(autreCanne.estModeActif()).toBe(false);
+    if (pistoletPeutTirer(autreCanne.estModeActif())) {
+      gestionnaireTir.actualiser(true, 500);
+    }
+    expect(intentions).toHaveLength(1);
   });
 });

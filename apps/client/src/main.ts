@@ -61,7 +61,7 @@ import { construireHarnaisPeche } from './interface/harnais-peche.js';
 import { monterPresentationPeche } from './interface/presenter-peche.js';
 import { construireHarnaisCanne } from './interface/harnais-canne.js';
 import { monterPresentationCanne } from './interface/presenter-canne.js';
-import { construireModePeche, type ModePeche } from './jeu/mode-peche.js';
+import { construireModePeche, pistoletPeutTirer, type ModePeche } from './jeu/mode-peche.js';
 import { construirePresentationCanne } from './jeu/presentation-canne.js';
 import {
   connecterSalleJeu,
@@ -1195,8 +1195,9 @@ function construireScene(): JeuClient | undefined {
         // `actualiser` : dès que le mode est actif, `tirer` est consommé par la
         // canne et le pistolet ne doit jamais recevoir l'action du même cadre.
         const modePecheActif = modePeche.estModeActif();
-        pistolet.setVisible(!modePecheActif);
-        if (!modePecheActif) {
+        const pistoletAutorisé = pistoletPeutTirer(modePecheActif);
+        pistolet.setVisible(pistoletAutorisé);
+        if (pistoletAutorisé) {
           gestionnaireTir.actualiser(dernierEtatEntrees.tirer, tempsTir);
         }
         pistolet.actualiser(tempsTir);

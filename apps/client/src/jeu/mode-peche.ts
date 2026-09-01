@@ -31,6 +31,15 @@ export interface ModePeche {
   readonly canneBabylon: CanneBabylon;
 }
 
+/**
+ * Décide si le pistolet doit recevoir `tirer` après actualisation du mode.
+ * Le pistolet n'est armé que lorsque le mode pêche est inactif : dès qu'on
+ * entre ou reste en mode pêche, `tirer` est consommé par la canne.
+ */
+export function pistoletPeutTirer(modeActif: boolean): boolean {
+  return !modeActif;
+}
+
 function zoneProcheDe(position: Vecteur3, zones: readonly ZonePeche[]): ZonePeche | undefined {
   for (const zone of zones) {
     const distance = Math.hypot(position.x - zone.centre.x, position.z - zone.centre.z);

@@ -220,6 +220,56 @@ describe('contrôleur de canne locale', () => {
     expect(() => gestionnaire.actualiser({ tirer: false, interagir: false })).not.toThrow();
     expect(gestionnaire.lireEtat().vue).toBe('remontee');
   });
+
+  it('rejette un état serveur obsolète de séquence antérieure sans régresser', () => {
+    const zone = zoneDeMonde();
+    const monde = genererMonde('peche-mvp-v1');
+    const adaptateur = construireAdaptateurPecheCoeurJeu(monde);
+    const maintenant = 1000;
+    const lireHorodatage = (): number => maintenant;
+    const gestionnaire = new GestionnaireCanne({
+      lireZone: () => zone,
+      lirePosition: () => ({ x: zone.centre.x, y: 0, z: zone.centre.z }),
+      lireHorodatage,
+      graine: 'peche-mvp-v1',
+      interfacePeche: {
+        afficherInvite: () => undefined,
+        afficherStatut: () => undefined,
+        afficherResultat: () => undefined,
+      },
+      adaptateur,
+    });
+    gestionnaire.actualiser({ tirer: false, interagir: true });
+    gestionnaire.actualiser({ tirer: true, interagir: false });
+    const lance = gestionnaire.lireEtat();
+    expect(lance.sequence).toBe(1);
+
+    // Un adaptateur menteur renvoie un état avec une séquence antérieure (0) :
+    // le contrôleur doit l'ignorer et ne pas régresser.
+    const obsolète = adaptateur.avancer(lance.peche, maintenant);
+    const menteur = {
+      ...adaptateur,
+      avancer: () => ({ ...obsolète, sequence: 0 }),
+    };
+    const faux = new GestionnaireCanne({
+      lireZone: () => zone,
+      lirePosition: () => ({ x: zone.centre.x, y: 0, z: zone.centre.z }),
+      lireHorodatage,
+      graine: 'peche-mvp-v1',
+      interfacePeche: {
+        afficherInvite: () => undefined,
+        afficherStatut: () => undefined,
+        afficherResultat: () => undefined,
+      },
+      adaptateur: menteur,
+    });
+    faux.actualiser({ tirer: false, interagir: true });
+    faux.actualiser({ tirer: true, interagir: false });
+    const avant = faux.lireEtat();
+    expect(() => faux.actualiser({ tirer: false, interagir: false })).not.toThrow();
+    expect(faux.lireEtat().sequence).toBeGreaterThanOrEqual(avant.sequence);
+    expect(faux.lireEtat().peche.sequence).toBeGreaterThanOrEqual(avant.peche.sequence);
+  });
 });
 
 function delaiPredit(): number {

@@ -574,6 +574,11 @@ h1 {
   display: grid;
 }
 
+.scene-shell[data-mode='presentation'][data-presentation='canne-peche'] .ath {
+  display: grid;
+  bottom: 74px;
+}
+
 .ath p {
   margin: 0;
 }

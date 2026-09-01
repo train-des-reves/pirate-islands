@@ -60,16 +60,16 @@ test('force les états de la canne via la fixture et capture la séquence compl�
     type Crochet = { forcerEtatCanne?: (vue: string) => void };
     (window as unknown as { __pirateIslandsE2E?: Crochet }).__pirateIslandsE2E?.forcerEtatCanne?.('rangee');
   });
-  await expect(page.getByTestId('peche-invite')).toHaveAttribute('hidden', '');
+  await expect(page.getByTestId('peche-invite')).toBeHidden();
   await page.screenshot({ path: 'docs/preuves/canne-repos-1280x720.png', fullPage: false });
 
   await page.evaluate(() => {
     type Crochet = { forcerEtatCanne?: (vue: string) => void };
     (window as unknown as { __pirateIslandsE2E?: Crochet }).__pirateIslandsE2E?.forcerEtatCanne?.('prete');
   });
-  await expect(page.getByTestId('peche-invite')).not.toHaveAttribute('hidden');
+  await expect(page.getByTestId('peche-invite')).toBeVisible();
   await expect(page.getByTestId('peche-invite-texte')).toHaveText('Commencer à pêcher');
-  await expect(page.getByTestId('peche-statut')).not.toHaveAttribute('hidden');
+  await expect(page.getByTestId('peche-statut')).toBeVisible();
   await expect(page.getByTestId('peche-statut')).toHaveText('Canne prête — cliquez pour lancer');
   await page.screenshot({ path: 'docs/preuves/canne-prete-1280x720.png', fullPage: false });
 
