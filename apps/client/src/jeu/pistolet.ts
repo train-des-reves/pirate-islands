@@ -193,6 +193,11 @@ export class PistoletPremierePersonne {
     this.actualiser(maintenant);
   }
 
+  /** Masque ou affiche le modèle local (canne et pistolet ne sont jamais actifs ensemble). */
+  public setVisible(visible: boolean): void {
+    this.racine.setEnabled(visible);
+  }
+
   public liberer(): void {
     this.racine.dispose(false, true);
     this.repereBouche.dispose();
