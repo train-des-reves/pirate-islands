@@ -48,6 +48,8 @@ export interface DiagnosticSalleConnecte {
   readonly rejouerDernierTir: () => void;
   /** Appelle le mannequin E2E serveur réservé aux tests. */
   readonly infligerDegatsE2E: (degats: number) => void;
+  /** Tire quatre fois avec la cadence serveur pour neutraliser un sloop pirate. */
+  readonly neutraliserPirateMaritime: (cibleId?: string) => void;
   /** Lit l'état de combat réel observé après la dernière synchronisation réseau. */
   readonly lireCombat: () => EtatCombatDiagnostic;
   /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
@@ -68,14 +70,12 @@ interface EtatCombatInterne {
   codeDeconnexion: number | undefined;
 }
 
-function écrireDiagnosticCombat(
-  elements: ElementsDiagnosticSalle,
-  etat: EtatCombatInterne,
-): void {
+function écrireDiagnosticCombat(elements: ElementsDiagnosticSalle, etat: EtatCombatInterne): void {
   elements.cible.textContent = 'Cible : ' + (etat.cibleId ?? 'aucune');
   elements.santeJoueur.textContent = 'Santé joueur : ' + etat.santeJoueur;
   elements.santePirate.textContent = 'Santé pirate : ' + etat.santePirate;
-  elements.reapparition.textContent = 'En attente : ' + (etat.enAttenteReapparition ? 'oui' : 'non');
+  elements.reapparition.textContent =
+    'En attente : ' + (etat.enAttenteReapparition ? 'oui' : 'non');
   elements.deconnexion.textContent =
     etat.codeDeconnexion === undefined
       ? 'Rejet serveur : aucun'
@@ -107,7 +107,10 @@ function lireJoueurLocal(salle: Room<unknown, EtatSalle>): Joueur | undefined {
 function calculerViseeDeterministe(
   salle: Room<unknown, EtatSalle>,
   cibleId?: string,
-): { readonly origine: { readonly x: number; readonly y: number; readonly z: number }; readonly direction: { readonly x: number; readonly y: number; readonly z: number } } {
+): {
+  readonly origine: { readonly x: number; readonly y: number; readonly z: number };
+  readonly direction: { readonly x: number; readonly y: number; readonly z: number };
+} {
   const joueur = lireJoueurLocal(salle);
   const position = {
     x: joueur?.transformation.x ?? 0,
@@ -116,8 +119,10 @@ function calculerViseeDeterministe(
   };
 
   const pirates = [...salle.state.pirates.values()];
+  const bateaux = [...salle.state.bateauxPirates.values()];
   const cible = cibleId
-    ? pirates.find((pirate) => pirate.identifiant === cibleId && pirate.vivant)
+    ? (bateaux.find((bateau) => bateau.identifiant === cibleId && bateau.actif) ??
+      pirates.find((pirate) => pirate.identifiant === cibleId && pirate.vivant))
     : undefined;
 
   let centre: { readonly x: number; readonly y: number; readonly z: number };
@@ -188,25 +193,26 @@ export async function connecterDiagnosticSalle(
       santeJoueur: joueur?.sante ?? etatCombat.santeJoueur,
       enAttenteReapparition: joueur !== undefined && !joueur.vivant,
     };
+    const cibleBateau = etatCombat.cibleId
+      ? salleTypée.state.bateauxPirates.get(etatCombat.cibleId)
+      : undefined;
     const cible = etatCombat.cibleId ? salleTypée.state.pirates.get(etatCombat.cibleId) : undefined;
     etatCombat = {
       ...etatCombat,
-      santePirate: cible?.sante ?? etatCombat.santePirate,
-      pirateNeutralise: cible !== undefined && !cible.vivant,
+      santePirate: cibleBateau?.sante ?? cible?.sante ?? etatCombat.santePirate,
+      pirateNeutralise:
+        (cibleBateau !== undefined && !cibleBateau.actif) || (cible !== undefined && !cible.vivant),
     };
     écrireDiagnosticCombat(elements, etatCombat);
   };
 
-  salleTypée.onMessage(
-    NOMS_MESSAGES.resultatTir,
-    (message: MessageResultatTir) => {
-      etatCombat.dernierResultat = message;
-      etatCombat.cibleId = message.cibleId;
-      etatCombat.degats = message.degats;
-      etatCombat.pirateNeutralise = message.pirateNeutralise;
-      mettreAJourDiagnostic();
-    },
-  );
+  salleTypée.onMessage(NOMS_MESSAGES.resultatTir, (message: MessageResultatTir) => {
+    etatCombat.dernierResultat = message;
+    etatCombat.cibleId = message.cibleId;
+    etatCombat.degats = message.degats;
+    etatCombat.pirateNeutralise = message.pirateNeutralise;
+    mettreAJourDiagnostic();
+  });
 
   salleTypée.onError((code) => {
     dernierCodeDeconnexion = code;
@@ -222,15 +228,18 @@ export async function connecterDiagnosticSalle(
   salleTypée.onStateChange(() => mettreAJourDiagnostic());
   mettreAJourDiagnostic();
 
-  const émettreIntention = (origine: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  }, direction: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  }): MessageIntentionTir => {
+  const émettreIntention = (
+    origine: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    },
+    direction: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    },
+  ): MessageIntentionTir => {
     const intention: MessageIntentionTir = {
       sequence,
       origineX: origine.x,
@@ -293,6 +302,24 @@ export async function connecterDiagnosticSalle(
 
       const message: MessageDegatsE2E = { degats };
       salleTypée.send(NOMS_MESSAGES.degatsE2E, message);
+    },
+    neutraliserPirateMaritime: (cibleId) => {
+      if (détruite) {
+        return;
+      }
+      let nombre = 0;
+      const tirerUneFois = (): void => {
+        if (détruite || nombre >= 4) {
+          return;
+        }
+        const visee = calculerViseeDeterministe(salleTypée, cibleId);
+        émettreIntention(visee.origine, visee.direction);
+        nombre += 1;
+        if (nombre < 4) {
+          window.setTimeout(tirerUneFois, 160);
+        }
+      };
+      tirerUneFois();
     },
     lireCombat: () => ({
       cibleId: etatCombat.cibleId,

@@ -28,3 +28,6 @@ export * from './peche.js';
 export * from './aleatoire.js';
 export * from './ia-pirate.js';
 export * from './simulation-pirate.js';
+export * from './routes-maritimes.js';
+export * from './simulation-maritime.js';
+export * from './rencontre-maritime.js';

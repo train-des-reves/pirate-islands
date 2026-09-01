@@ -80,12 +80,29 @@ export const PirateSchema = schema(
 );
 export type Pirate = SchemaType<typeof PirateSchema>;
 
+/** État partagé d'un sloop pirate en mer, piloté uniquement par le serveur. */
+export const BateauPirateSchema = schema(
+  {
+    identifiant: t.string().default(''),
+    transformation: TransformationSchema,
+    sante: t.uint16().default(SANTE_BATEAU_MAXIMALE),
+    actif: t.boolean().default(true),
+    statut: t.string().default('patrouille'),
+    vitesse: t.number().default(0),
+    cibleId: t.string().default(''),
+    routeId: t.string().default(''),
+  },
+  'BateauPirate',
+);
+export type BateauPirate = SchemaType<typeof BateauPirateSchema>;
+
 export const EtatSalleSchema = schema(
   {
     metadonnees: MetadonneesSalleSchema,
     phase: t.string().default('attente'),
     joueurs: t.map(JoueurSchema),
     bateaux: t.map(BateauSchema),
+    bateauxPirates: t.map(BateauPirateSchema),
     pirates: t.map(PirateSchema),
   },
   'EtatSalle',
@@ -154,6 +171,18 @@ export function creerBateau(sessionId: string, indexApparition: number): Bateau 
     sante: SANTE_BATEAU_MAXIMALE,
     actif: true,
     statut: 'amarré',
+  });
+}
+
+export function creerBateauPirate(identifiant: string): BateauPirate {
+  return new BateauPirateSchema({
+    identifiant,
+    sante: SANTE_BATEAU_MAXIMALE,
+    actif: true,
+    statut: 'patrouille',
+    vitesse: 0,
+    cibleId: '',
+    routeId: '',
   });
 }
 
