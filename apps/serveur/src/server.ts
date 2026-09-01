@@ -20,6 +20,8 @@ export interface OptionsServeur {
   readonly modeE2E?: boolean;
   /** Horloge de salle injectable pour les tests déterministes. */
   readonly horloge?: HorlogeSimulation;
+  /** Fabrique appelée pour donner une horloge indépendante à chaque salle. */
+  readonly fabriqueHorloge?: () => HorlogeSimulation;
 }
 
 export interface ServeurDemarre {
@@ -36,7 +38,8 @@ export async function démarrerServeur(options: OptionsServeur = {}): Promise<Se
   const port = options.port ?? Number.parseInt(process.env.SERVER_PORT ?? '2567', 10);
   const modeE2E = options.modeE2E ?? process.env.SERVER_E2E === '1';
   définirModeE2EServeur(modeE2E);
-  const horloge = options.horloge ?? creerHorlogeSimulation();
+  const fabriqueHorloge =
+    options.fabriqueHorloge ?? (() => options.horloge ?? creerHorlogeSimulation());
   const http = createServer();
   const transport = new WebSocketTransport({ server: http });
   const colyseus = new ServeurColyseus({
@@ -58,7 +61,7 @@ export async function démarrerServeur(options: OptionsServeur = {}): Promise<Se
 
   class SalleJeuConfiguree extends SalleJeu {
     override onCreate(optionsSalle: unknown): void {
-      this.configurerHorloge(horloge);
+      this.configurerHorloge(fabriqueHorloge());
       super.onCreate(optionsSalle);
     }
   }
