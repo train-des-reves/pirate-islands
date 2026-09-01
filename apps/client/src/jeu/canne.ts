@@ -308,6 +308,32 @@ export class GestionnaireCanne {
     this.interfacePeche.afficherStatut('Pêche annulée');
   }
 
+  /**
+   * Applique un état de pêche poussé par une autorité externe (serveur dans une
+   * issue ultérieure). Un état obsolète (séquence antérieure, ou même séquence
+   * avec un temps antérieur) est ignoré sans régression ni erreur.
+   */
+  public recevoirEtatServeur(etat: EtatPeche): void {
+    const courant = this.etat.peche;
+    const obsolète =
+      etat.sequence < courant.sequence ||
+      (etat.sequence === courant.sequence && etat.tempsCourantMs < courant.tempsCourantMs);
+    if (obsolète) {
+      return;
+    }
+    if (etat.phase === 'morsure' && this.etat.vue !== 'morsure') {
+      this.etat = { ...this.etat, vue: 'morsure', peche: etat };
+      this.interfacePeche.afficherStatut(libelleStatut(this.etat));
+      return;
+    }
+    if (etat.phase === 'terminee') {
+      this.etat = { ...this.etat, vue: 'remontee', peche: etat };
+      this.interfacePeche.afficherStatut(libelleStatut(this.etat));
+      return;
+    }
+    this.etat = { ...this.etat, peche: etat };
+  }
+
   public reinitialiser(): void {
     this.etat = etatRangee(undefined);
     this.tireurPrecedent = false;

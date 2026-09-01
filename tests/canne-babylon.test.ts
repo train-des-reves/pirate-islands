@@ -38,6 +38,16 @@ describe('canne procédurale Babylon', () => {
     expect(scene.getMeshByName('canne-flotteur')).toBeDefined();
     expect(premiere.meshes.length).toBeGreaterThan(0);
     expect(new Set(premiere.meshes.map((mesh) => mesh.name)).size).toBe(premiere.meshes.length);
+    // Toutes les transformations sont finies (jamais NaN/Infinity).
+    for (const mesh of premiere.meshes) {
+      expect(Number.isFinite(mesh.position.x)).toBe(true);
+      expect(Number.isFinite(mesh.position.y)).toBe(true);
+      expect(Number.isFinite(mesh.position.z)).toBe(true);
+      expect(Number.isFinite(mesh.scaling.x)).toBe(true);
+    }
+    // Le fil n'est pas vide : sa géométrie expose bien un maillage non nul.
+    const fil = scene.getMeshByName('canne-fil');
+    expect(fil?.getTotalVertices()).toBeGreaterThan(0);
 
     premiere.afficherEtat({ vue: 'lancee', sequence: 1, peche: { phase: 'attente', sequence: 1, lanceAuMs: 0, tempsCourantMs: 0 } });
     expect(scene.getMeshByName('canne-fil')?.isVisible).toBe(true);

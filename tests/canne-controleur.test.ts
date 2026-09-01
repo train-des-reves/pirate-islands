@@ -216,9 +216,34 @@ describe('contrôleur de canne locale', () => {
     expect(gestionnaire.lireEtat().vue).toBe('remontee');
     expect(gestionnaire.lireEtat().peche.resultat).toBe('annulee');
 
-    // Un retour de morsure annoncé après coup est ignoré sans erreur.
-    expect(() => gestionnaire.actualiser({ tirer: false, interagir: false })).not.toThrow();
+    // Un retour de morsure poussé après coup (séquence antérieure) est ignoré
+    // sans faire régresser l'état ni lever d'erreur.
+    const morsureTardive = {
+      ...gestionnaire.lireEtat().peche,
+      phase: 'morsure' as const,
+      sequence: 0,
+      tempsCourantMs: faux.maintenant() + 100,
+    };
+    expect(() => gestionnaire.recevoirEtatServeur(morsureTardive)).not.toThrow();
     expect(gestionnaire.lireEtat().vue).toBe('remontee');
+  });
+
+  it('applique un état serveur de morsure valide via recevoirEtatServeur', () => {
+    const zone = zoneDeMonde();
+    const faux = construire(zone, { x: zone.centre.x, y: 0, z: zone.centre.z });
+    const { gestionnaire, avancer } = faux;
+    gestionnaire.actualiser({ tirer: false, interagir: true });
+    gestionnaire.actualiser({ tirer: true, interagir: false });
+    avancer(delaiPredit());
+
+    // Le serveur pousse l'état de morsure autoritaire.
+    const morsureAutoritaire = {
+      ...gestionnaire.lireEtat().peche,
+      phase: 'morsure' as const,
+      tempsCourantMs: faux.maintenant(),
+    };
+    gestionnaire.recevoirEtatServeur(morsureAutoritaire);
+    expect(gestionnaire.lireEtat().vue).toBe('morsure');
   });
 
   it('rejette un état serveur obsolète de séquence antérieure sans régresser', () => {
