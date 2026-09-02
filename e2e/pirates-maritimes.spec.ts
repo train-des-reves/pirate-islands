@@ -5,6 +5,8 @@ test.use({ video: 'on' });
 type EtatMaritime = {
   readonly salleId: string | undefined;
   readonly graine: string | undefined;
+  readonly nombreJoueurs: number;
+  readonly statutsObserves: readonly string[];
   readonly bateaux: readonly {
     readonly id: string;
     readonly routeId: string;
@@ -62,11 +64,11 @@ test.describe('rencontre maritime autoritaire', () => {
     await page.goto('/?e2e=1&vue=pirates-maritimes&graine=e2e-maritime');
     await expect(page.locator('#app')).toHaveAttribute('data-mode', 'pirates-maritimes');
     await expect(page.locator('#app')).toHaveAttribute('data-scene', 'ready');
-    await attendreCrochet(page);
+    await expect
+      .poll(async () => (await lireEtat(page)).graine, { timeout: 15_000 })
+      .toBe('e2e-maritime');
+    await expect.poll(async () => (await lireEtat(page)).salleId, { timeout: 5_000 }).toBeTruthy();
     const initial = await lireEtat(page);
-    expect(initial.bateaux[0]?.routeId).toBe('route-maritime-1');
-    expect(initial.bateaux[0]?.equipage).toBe(2);
-
     const identifiantSalle = initial.salleId;
     expect(identifiantSalle).toBeTruthy();
     const contexteSecond = await browser.newContext({ viewport: { width: 1280, height: 720 } });
@@ -76,11 +78,32 @@ test.describe('rencontre maritime autoritaire', () => {
       'console',
       (message) => message.type() === 'error' && erreursSecond.push(message.text()),
     );
+    const navigationSecond = second.goto(
+      `/?e2e=1&vue=pirates-maritimes&graine=e2e-maritime&room=${encodeURIComponent(identifiantSalle!)}`,
+    );
 
     try {
-      await second.goto(
-        `/?e2e=1&vue=pirates-maritimes&graine=e2e-maritime&room=${encodeURIComponent(identifiantSalle!)}`,
-      );
+      await expect
+        .poll(async () => (await lireEtat(page)).statutsObserves.includes('patrouille'), {
+          timeout: 5_000,
+          intervals: [10, 20, 50, 100],
+        })
+        .toBe(true);
+      await page.screenshot({ path: 'docs/preuves/pirates-maritimes-patrouille-1280x720.png' });
+      await expect
+        .poll(async () => (await lireEtat(page)).nombreJoueurs, {
+          timeout: 5_000,
+          intervals: [10, 20, 50, 100],
+        })
+        .toBe(2);
+      await expect
+        .poll(async () => (await lireEtat(page)).bateaux[0]?.statut, {
+          timeout: 5_000,
+          intervals: [10, 20, 50, 100],
+        })
+        .toBe('poursuite');
+      await page.screenshot({ path: 'docs/preuves/pirates-maritimes-poursuite-1280x720.png' });
+      await navigationSecond;
       await attendreCrochet(second);
       await expect
         .poll(() => lireEtat(second))
@@ -88,8 +111,19 @@ test.describe('rencontre maritime autoritaire', () => {
           salleId: identifiantSalle,
           bateaux: [{ equipage: 2 }],
         });
-      await page.screenshot({ path: 'docs/preuves/pirates-maritimes-patrouille-1280x720.png' });
+      await expect
+        .poll(async () => (await lireEtat(page)).bateaux[0]?.routeId, { timeout: 5_000 })
+        .toBe('route-maritime-1');
+      await expect
+        .poll(async () => (await lireEtat(page)).bateaux[0]?.equipage, { timeout: 5_000 })
+        .toBe(2);
 
+      await expect
+        .poll(async () => (await lireEtat(page)).statutsObserves.includes('poursuite'), {
+          timeout: 8_000,
+          intervals: [10, 20, 50, 100],
+        })
+        .toBe(true);
       await expect
         .poll(async () => (await lireEtat(page)).bateaux[0]?.attaqueActive, { timeout: 12_000 })
         .toBe(true);
