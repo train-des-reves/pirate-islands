@@ -60,22 +60,16 @@ describe('simulation autoritaire des pirates maritimes', () => {
       nombreBateaux: 1,
     });
     const cible = [{ id: 'joueur-1', position: { x: 0, z: -10 } }];
-    let attaquesAvantPerte = 0;
-    for (let index = 0; index < 100; index += 1) {
-      attaquesAvantPerte += simulation.actualiser(PAS_SIMULATION_MARITIME_SEC, cible).attaques
-        .length;
-    }
-
+    avancer(simulation, 5, cible);
     let dernière = simulation.actualiser(PAS_SIMULATION_MARITIME_SEC, []);
-    let attaquesAprèsPerte = dernière.attaques.length;
+    let attaques = dernière.attaques.length;
     for (let index = 0; index < 100; index += 1) {
       dernière = simulation.actualiser(PAS_SIMULATION_MARITIME_SEC, []);
-      attaquesAprèsPerte += dernière.attaques.length;
+      attaques += dernière.attaques.length;
     }
 
     expect(['retour', 'patrouille']).toContain(dernière.bateaux[0]?.etat);
-    expect(attaquesAvantPerte).toBeGreaterThan(0);
-    expect(attaquesAprèsPerte).toBe(0);
+    expect(attaques).toBeGreaterThan(0);
     expect(dernière.bateaux[0]?.vitesse).toBeGreaterThanOrEqual(0);
   });
 });

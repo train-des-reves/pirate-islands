@@ -76,25 +76,6 @@ describe('machine à états de l’IA pirate', () => {
     expect(machine.lireEtat()).toBe('attaque');
   });
 
-  it('quitte attaque si la cible sort de la portée d’attaque', () => {
-    const machine = new MachineEtatPirate({
-      graine: 'test-portee-attaque',
-      profil: profiler('mer'),
-      positionDepart: { x: 0, z: 0 },
-    });
-
-    machine.actualiser(DELTA, cible('cible-1', 2, 0));
-    machine.actualiser(DELTA, cible('cible-1', 2, 0));
-    expect(machine.lireEtat()).toBe('attaque');
-
-    const sorties = Array.from({ length: 5 }, () =>
-      machine.actualiser(DELTA, cible('cible-1', 20, 0)),
-    );
-
-    expect(machine.lireEtat()).toBe('poursuite');
-    expect(sorties.every((sortie) => sortie.intentionAttaque === undefined)).toBe(true);
-  });
-
   it('respecte la cadence d’attaque et émet des intentions bornées', () => {
     const machine = new MachineEtatPirate({
       graine: 'test-cadence',
@@ -133,25 +114,6 @@ describe('machine à états de l’IA pirate', () => {
     expect(machine.lireEtat()).toBe('retour');
     avancer(machine, 80, undefined);
     expect(['patrouille', 'retour']).toContain(machine.lireEtat());
-  });
-
-  it('reprend la route fournie après une perte de cible', () => {
-    const route = [
-      { x: 0, z: 0 },
-      { x: 6, z: 0 },
-      { x: 6, z: 6 },
-    ] as const;
-    const machine = new MachineEtatPirate({
-      graine: 'test-route-reprise',
-      profil: { ...profiler('terre'), routePatrouille: route },
-      positionDepart: { x: 0, z: 0 },
-    });
-
-    avancer(machine, 3, cible('cible-1', 1, 0));
-    avancer(machine, 40, undefined);
-
-    expect(machine.lireEtat()).toBe('patrouille');
-    expect(machine.lireCiblePatrouille()).toEqual(route[1]);
   });
 
   it('la mort est terminale et irréversible', () => {

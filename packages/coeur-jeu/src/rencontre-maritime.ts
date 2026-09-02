@@ -19,8 +19,6 @@ export const PAS_SIMULATION_MARITIME_SEC = 0.05;
 export const NOMBRE_BATEAUX_PIRATES_MAX = 2;
 /** Dégâts d'une attaque pirate validée par le serveur. */
 export const DEGATS_ATTAQUE_PIRATE = 20;
-/** Fenêtre déterministe de patrouille avant une nouvelle acquisition. */
-export const DELAI_ACQUISITION_CIBLE_MARITIME_SEC = 3;
 
 export type PointRouteMaritime = Coordonnees;
 
@@ -212,8 +210,6 @@ interface MachineMaritime {
 export class SimulationPiratesMaritimes {
   public readonly routes: readonly RouteMaritime[];
   private readonly machines: readonly MachineMaritime[];
-  private signatureCibles = '';
-  private tempsDepuisChangementCibles = 0;
 
   public constructor(options: {
     readonly monde: DescripteurMonde;
@@ -249,24 +245,10 @@ export class SimulationPiratesMaritimes {
     deltaSecondes: number,
     cibles: readonly CiblePerçue[],
   ): SortieRencontreMaritime {
-    const signature = cibles
-      .map((cible) => cible.id)
-      .sort()
-      .join('|');
-    if (signature !== this.signatureCibles) {
-      this.signatureCibles = signature;
-      this.tempsDepuisChangementCibles = 0;
-    } else {
-      this.tempsDepuisChangementCibles += Number.isFinite(deltaSecondes)
-        ? Math.max(0, deltaSecondes)
-        : 0;
-    }
-    const ciblesDisponibles =
-      this.tempsDepuisChangementCibles >= DELAI_ACQUISITION_CIBLE_MARITIME_SEC ? cibles : [];
     const attaques: AttaqueMaritime[] = [];
     const bateaux = this.machines.map((entrée) => {
       const position = entrée.machine.lirePosition();
-      const cible = ciblesDisponibles.find(
+      const cible = cibles.find(
         (candidate) =>
           distance(position, candidate.position) <= PROFIL_MER.porteePerception ||
           entrée.machine.lireCible()?.id === candidate.id,

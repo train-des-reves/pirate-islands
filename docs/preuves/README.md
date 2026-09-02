@@ -133,9 +133,8 @@ Le relecteur vérifie le sloop, ses deux pirates d’équipage, la route
 `route-maritime-1`, la poursuite et l’attaque côté serveur, puis la destruction
 et l’arrêt du sillage observés dans les deux contextes. Les captures sont
 `pirates-maritimes-patrouille-1280x720.png`,
-`pirates-maritimes-poursuite-1280x720.png`,
 `pirates-maritimes-attaque-1280x720.png`,
 `pirates-maritimes-detruit-1280x720.png` et
 `pirates-maritimes-observateur-1280x720.png`. Le GIF de séquence
-`pirates-maritimes-e2e.gif` regroupe les vues patrouille, poursuite, attaque et
-destruction en 1280×720.
+`pirates-maritimes-e2e.gif` regroupe les vues patrouille, attaque et destruction
+en 1280×720.

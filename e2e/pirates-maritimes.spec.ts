@@ -90,6 +90,8 @@ test.describe('rencontre maritime autoritaire', () => {
         })
         .toBe(true);
       await page.screenshot({ path: 'docs/preuves/pirates-maritimes-patrouille-1280x720.png' });
+      await navigationSecond;
+      await attendreCrochet(second);
       await expect
         .poll(async () => (await lireEtat(page)).nombreJoueurs, {
           timeout: 5_000,
@@ -103,8 +105,6 @@ test.describe('rencontre maritime autoritaire', () => {
         })
         .toBe('poursuite');
       await page.screenshot({ path: 'docs/preuves/pirates-maritimes-poursuite-1280x720.png' });
-      await navigationSecond;
-      await attendreCrochet(second);
       await expect
         .poll(() => lireEtat(second))
         .toMatchObject({
