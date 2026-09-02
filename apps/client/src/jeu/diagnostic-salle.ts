@@ -261,9 +261,9 @@ export async function connecterDiagnosticSalle(
     mettreAJourDiagnostic();
   });
 
-  salleTypée.onError((code) => {
+  salleTypée.onError((code, message) => {
     dernierCodeDeconnexion = code;
-    raisonDeconnexion = 'Requête refusée par le serveur.';
+    raisonDeconnexion = message || 'Requête refusée par le serveur.';
     etatCombat.codeDeconnexion = code;
     etatCombat.raisonDeconnexion = raisonDeconnexion;
     mettreAJourDiagnostic();

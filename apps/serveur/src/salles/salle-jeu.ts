@@ -595,7 +595,6 @@ export class SalleJeu extends Room<{
   }
 
   private traiterLancerPeche(client: ClientSalle, message: unknown): void {
-    this.actualiserPeches();
     const validation = validerMessageLancerPeche(message);
     if (!validation.valide) {
       this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
@@ -608,7 +607,7 @@ export class SalleJeu extends Room<{
       return;
     }
     if (!joueur.vivant) {
-      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Un joueur mort ne peut pas pêcher.');
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Un joueur mort ne peut pas pêcher.');
       return;
     }
 
@@ -623,11 +622,11 @@ export class SalleJeu extends Room<{
     const commande = validation.valeur;
     const maintenant = this.horloge.lireMs();
     if (this.etatsPeche.has(client.sessionId)) {
-      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Une ligne de pêche est déjà active.');
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Une ligne de pêche est déjà active.');
       return;
     }
     if (commande.sequence <= données.derniereSequencePeche) {
-      this.rejeterMessage(
+      this.refuserActionPeche(
         client,
         CODE_MESSAGE_INVALIDE,
         'La séquence de pêche a déjà été consommée.',
@@ -635,7 +634,7 @@ export class SalleJeu extends Room<{
       return;
     }
     if (maintenant - données.dernierLancerPecheMs < CADENCE_LANCER_PECHE_MS) {
-      this.rejeterMessage(
+      this.refuserActionPeche(
         client,
         CODE_MESSAGE_INVALIDE,
         'La cadence de pêche n’est pas respectée.',
@@ -645,7 +644,7 @@ export class SalleJeu extends Room<{
 
     const zone = this.monde.zonesPeche.find((candidate) => candidate.id === commande.zoneId);
     if (!zone) {
-      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'La zone de pêche est inconnue.');
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'La zone de pêche est inconnue.');
       return;
     }
     const positionJoueur = {
@@ -656,15 +655,7 @@ export class SalleJeu extends Room<{
     const origine = { x: commande.origineX, y: commande.origineY, z: commande.origineZ };
     const flotteur = { x: commande.flotteurX, y: commande.flotteurY, z: commande.flotteurZ };
     if (!pointDansZonePeche(zone, positionJoueur)) {
-      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le joueur est hors de la zone de pêche.');
-      return;
-    }
-    if (!pointDansZonePeche(zone, flotteur)) {
-      this.rejeterMessage(
-        client,
-        CODE_MESSAGE_INVALIDE,
-        'Le flotteur est hors de la zone de pêche.',
-      );
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Le joueur est hors de la zone de pêche.');
       return;
     }
     if (
@@ -674,7 +665,7 @@ export class SalleJeu extends Room<{
         z: joueur.transformation.z,
       }) > DISTANCE_ORIGINE_PECHE_ADMISE
     ) {
-      this.rejeterMessage(
+      this.refuserActionPeche(
         client,
         CODE_MESSAGE_INVALIDE,
         'L’origine de pêche est trop éloignée du joueur.',
@@ -682,7 +673,15 @@ export class SalleJeu extends Room<{
       return;
     }
     if (distance3D(origine, flotteur) > PORTEE_PECHE) {
-      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le flotteur est hors de portée.');
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Le flotteur est hors de portée.');
+      return;
+    }
+    if (!pointDansZonePeche(zone, flotteur)) {
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Le flotteur est hors de la zone de pêche.',
+      );
       return;
     }
 
@@ -707,7 +706,6 @@ export class SalleJeu extends Room<{
   }
 
   private traiterReleverPeche(client: ClientSalle, message: unknown): void {
-    this.actualiserPeches();
     const validation = validerMessageReleverPeche(message);
     if (!validation.valide) {
       this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
@@ -715,7 +713,7 @@ export class SalleJeu extends Room<{
     }
     const état = this.etatsPeche.get(client.sessionId);
     if (!état || état.sequence !== validation.valeur.sequence) {
-      this.rejeterMessage(
+      this.refuserActionPeche(
         client,
         CODE_MESSAGE_INVALIDE,
         'Aucune ligne active ne correspond à cette séquence.',
@@ -732,7 +730,6 @@ export class SalleJeu extends Room<{
   }
 
   private traiterAnnulerPeche(client: ClientSalle, message: unknown): void {
-    this.actualiserPeches();
     const validation = validerMessageAnnulerPeche(message);
     if (!validation.valide) {
       this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
@@ -740,7 +737,7 @@ export class SalleJeu extends Room<{
     }
     const état = this.etatsPeche.get(client.sessionId);
     if (!état || état.sequence !== validation.valeur.sequence) {
-      this.rejeterMessage(
+      this.refuserActionPeche(
         client,
         CODE_MESSAGE_INVALIDE,
         'Aucune ligne active ne correspond à cette séquence.',
@@ -938,6 +935,10 @@ export class SalleJeu extends Room<{
       z: pointApparition.z,
       horodatage: Date.now(),
     });
+  }
+
+  private refuserActionPeche(client: ClientSalle, code: number, raison: string): void {
+    client.error(code, raison);
   }
 
   private rejeterMessage(client: ClientSalle, code: number, raison: string): void {

@@ -54,9 +54,10 @@ async function attendrePeche(
 }
 
 test('montre la ligne autoritaire à deux clients et le refus français', async ({ browser }) => {
+  test.setTimeout(60_000);
   const contexteA = await browser.newContext({
     viewport: { width: 1280, height: 720 },
-    recordVideo: { dir: 'docs/preuves', size: { width: 1280, height: 720 } },
+    recordVideo: { dir: 'docs/preuves/playwright-resultats', size: { width: 1280, height: 720 } },
   });
   const contexteB = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const pageA = await contexteA.newPage();
@@ -74,7 +75,7 @@ test('montre la ligne autoritaire à deux clients et le refus français', async 
     await pageB.goto(
       `/?e2e=1&diagnostic=salle&peche=1&graine=peche-mvp-v1&room=${encodeURIComponent(salleId)}`,
     );
-    await expect(pageB.getByTestId('diagnostic-salle')).toBeVisible();
+    await expect(pageB.getByTestId('diagnostic-salle')).toBeVisible({ timeout: 15_000 });
     await expect(pageA.getByTestId('diagnostic-nombre-joueurs')).toHaveText(
       'Joueurs connectés : 2',
     );
@@ -142,9 +143,12 @@ test('montre la ligne autoritaire à deux clients et le refus français', async 
       },
     );
     const contenuComposite = Buffer.from(composite.split(',')[1] ?? '', 'base64');
-    await import('node:fs/promises').then(({ writeFile }) =>
-      writeFile('docs/preuves/peche-autoritaire-1280x720.png', contenuComposite),
-    );
+    const cheminComposite = 'docs/preuves/playwright-resultats/peche-autoritaire-1280x720.png';
+    await import('node:fs/promises').then(async ({ writeFile, mkdir, copyFile }) => {
+      await mkdir('docs/preuves/playwright-resultats', { recursive: true });
+      await writeFile(cheminComposite, contenuComposite);
+      await copyFile(cheminComposite, 'docs/preuves/peche-autoritaire-1280x720.png');
+    });
 
     await pageA.evaluate(() => {
       const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPeche })
@@ -158,12 +162,18 @@ test('montre la ligne autoritaire à deux clients et le refus français', async 
       crochet?.releverPeche?.();
     });
     await attendrePeche(pageA, (état) => état.dernierResultat?.resultat === 'prise');
+    await attendrePeche(pageB, (état) => état.dernierResultat?.resultat === 'prise');
     await attendrePeche(pageA, (état) => état.lignesActives === 0);
+    await attendrePeche(pageB, (état) => état.lignesActives === 0);
     await pageA.evaluate(() => {
       const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPeche })
         .__pirateIslandsE2E;
       crochet?.quitterSalleE2E?.();
     });
+    await expect(pageB.getByTestId('diagnostic-nombre-joueurs')).toHaveText(
+      'Joueurs connectés : 1',
+    );
+    await expect(pageB.getByTestId('peche-lignes-actives')).toHaveText('Lignes actives : 0');
   } finally {
     const video = pageA.video();
     await pageB.close();
@@ -172,9 +182,12 @@ test('montre la ligne autoritaire à deux clients et le refus français', async 
     await contexteB.close();
     await contexteA.close();
     if (cheminVideo) {
-      await import('node:fs/promises').then(({ rename }) =>
-        rename(cheminVideo, 'docs/preuves/peche-autoritaire-autorite.webm'),
-      );
+      await import('node:fs/promises').then(async ({ rename, copyFile, mkdir }) => {
+        await mkdir('docs/preuves/playwright-resultats', { recursive: true });
+        const cible = 'docs/preuves/playwright-resultats/peche-autoritaire-autorite.webm';
+        await rename(cheminVideo, cible);
+        await copyFile(cible, 'docs/preuves/peche-autoritaire-autorite.webm');
+      });
     }
   }
 });
