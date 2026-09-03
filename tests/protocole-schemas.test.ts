@@ -8,6 +8,7 @@ import {
   creerEtatSalle,
   creerJoueur,
   creerPirate,
+  LignePecheSchema,
   SANTE_BATEAU_MAXIMALE,
   SANTE_JOUEUR_MAXIMALE,
   SANTE_PIRATE_MAXIMALE,
@@ -34,6 +35,19 @@ describe('schémas multijoueur', () => {
     état.joueurs.set(joueur.identifiant, joueur);
     état.bateaux.set(bateau.identifiant, bateau);
     état.pirates.set(pirate.identifiant, pirate);
+    const ligne = new LignePecheSchema({
+      joueurId: 'session-a',
+      sequence: 4,
+      phase: 'morsure',
+      zoneId: 'zone-rivage-ile-aube',
+      flotteurX: -24,
+      flotteurY: 0,
+      flotteurZ: 18,
+      lanceAuMs: 100,
+      morsureAuMs: 600,
+      finMorsureMs: 1400,
+    });
+    état.lignesPeche.set(ligne.joueurId, ligne);
 
     const copie = decoderEtatSalle(encoderEtatSalle(état));
 
@@ -43,6 +57,14 @@ describe('schémas multijoueur', () => {
     expect(copie.joueurs.size).toBe(1);
     expect(copie.bateaux.size).toBe(1);
     expect(copie.pirates.size).toBe(1);
+    expect(copie.lignesPeche.size).toBe(1);
+    expect(copie.lignesPeche.get('session-a')).toMatchObject({
+      joueurId: 'session-a',
+      sequence: 4,
+      phase: 'morsure',
+      zoneId: 'zone-rivage-ile-aube',
+      morsureAuMs: 600,
+    });
     expect(copie.joueurs.get('session-a')).toMatchObject({
       identifiant: 'session-a',
       sessionId: 'session-a',

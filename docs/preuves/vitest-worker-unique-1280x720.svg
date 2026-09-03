@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#07111f" />
+  <rect x="115" y="85" width="1050" height="550" rx="24" fill="#102138" stroke="#31547a" />
+  <text x="170" y="170" fill="#72d9b3" font-family="system-ui, sans-serif" font-size="44" font-weight="700">Vitest limité à un worker</text>
+  <text x="170" y="212" fill="#a8bdd4" font-family="system-ui, sans-serif" font-size="22">Issue #51 · preuve d’infrastructure · 3 septembre 2026</text>
+  <line x1="170" y1="265" x2="1110" y2="265" stroke="#29445f" />
+  <text x="170" y="315" fill="#eaf2ff" font-family="system-ui, sans-serif" font-size="25">Workers maximum</text>
+  <text x="850" y="315" fill="#ffd479" font-family="monospace" font-size="25">maxWorkers: 1</text>
+  <line x1="170" y1="345" x2="1110" y2="345" stroke="#29445f" />
+  <text x="170" y="395" fill="#eaf2ff" font-family="system-ui, sans-serif" font-size="25">Parallélisme des fichiers</text>
+  <text x="775" y="395" fill="#ffd479" font-family="monospace" font-size="25">fileParallelism: false</text>
+  <line x1="170" y1="425" x2="1110" y2="425" stroke="#29445f" />
+  <text x="170" y="475" fill="#eaf2ff" font-family="system-ui, sans-serif" font-size="25">Commande vérifiée</text>
+  <text x="920" y="475" fill="#ffd479" font-family="monospace" font-size="25">pnpm test</text>
+  <rect x="170" y="515" width="940" height="68" rx="14" fill="#123d35" />
+  <text x="205" y="558" fill="#8ff0c8" font-family="system-ui, sans-serif" font-size="27" font-weight="700">✓ 32 fichiers · 196 tests réussis</text>
+  <text x="170" y="615" fill="#91a8c0" font-family="system-ui, sans-serif" font-size="18">Les tests Vitest des agents s’exécutent séquentiellement afin de réduire la consommation CPU.</text>
+</svg>

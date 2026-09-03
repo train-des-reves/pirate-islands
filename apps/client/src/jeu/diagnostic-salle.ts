@@ -8,10 +8,11 @@ import {
   type Joueur,
   type MessageDegatsE2E,
   type MessageIntentionTir,
+  type MessageResultatPeche,
   type MessageResultatTir,
   type OptionsConnexion,
 } from '@pirate/protocole';
-import { normaliserDirection } from '@pirate/coeur-jeu';
+import { calculerPrevisionPeche, genererMonde, normaliserDirection } from '@pirate/coeur-jeu';
 import {
   afficherAthCombat,
   construireEtatAthCombat,
@@ -30,6 +31,12 @@ export interface ElementsDiagnosticSalle {
   readonly reapparition: HTMLElement;
   readonly resultat: HTMLElement;
   readonly deconnexion: HTMLElement;
+  readonly pecheJoueur: HTMLElement;
+  readonly pecheSequence: HTMLElement;
+  readonly pecheZone: HTMLElement;
+  readonly pechePhase: HTMLElement;
+  readonly pecheLignesActives: HTMLElement;
+  readonly pecheResultat: HTMLElement;
   readonly athCombat?: ElementsAthCombat;
 }
 
@@ -42,6 +49,19 @@ export interface EtatCombatDiagnostic {
   readonly enAttenteReapparition: boolean;
   readonly dernierResultat: MessageResultatTir | undefined;
   readonly codeDeconnexion: number | undefined;
+}
+
+export interface EtatPecheDiagnostic {
+  readonly lignesActives: number;
+  readonly ligneLocale:
+    | {
+        readonly joueurId: string;
+        readonly sequence: number;
+        readonly zoneId: string;
+        readonly phase: string;
+      }
+    | undefined;
+  readonly dernierResultat: MessageResultatPeche | undefined;
 }
 
 export interface DiagnosticSalleConnecte {
@@ -58,6 +78,13 @@ export interface DiagnosticSalleConnecte {
   readonly lireCombat: () => EtatCombatDiagnostic;
   /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
   readonly lireDeconnexion: () => number | undefined;
+  readonly preparerPecheE2E: () => void;
+  readonly avancerPecheE2E: () => void;
+  readonly lancerPeche: () => void;
+  readonly releverPeche: () => void;
+  readonly annulerPeche: () => void;
+  readonly lirePeche: () => EtatPecheDiagnostic;
+  readonly quitterSalleE2E: () => void;
   readonly detruire: () => void;
 }
 
@@ -72,6 +99,7 @@ interface EtatCombatInterne {
   enAttenteReapparition: boolean;
   dernierResultat: MessageResultatTir | undefined;
   codeDeconnexion: number | undefined;
+  raisonDeconnexion: string;
 }
 
 function écrireDiagnosticCombat(
@@ -87,7 +115,7 @@ function écrireDiagnosticCombat(
   elements.deconnexion.textContent =
     etat.codeDeconnexion === undefined
       ? 'Rejet serveur : aucun'
-      : 'Rejet serveur : ' + etat.codeDeconnexion;
+      : 'Rejet serveur : ' + etat.codeDeconnexion + ' · ' + etat.raisonDeconnexion;
   const dernier = etat.dernierResultat;
   if (dernier === undefined) {
     elements.resultat.textContent = 'Dernier tir : —';
@@ -108,6 +136,24 @@ function écrireDiagnosticCombat(
       );
     }
   }
+}
+
+function écrireDiagnosticPeche(
+  salle: Room<unknown, EtatSalle>,
+  elements: ElementsDiagnosticSalle,
+  dernierResultat: MessageResultatPeche | undefined,
+): void {
+  const ligne =
+    salle.state.lignesPeche.get(salle.sessionId) ?? [...salle.state.lignesPeche.values()][0];
+  elements.pecheJoueur.textContent = 'Pêcheur ligne : ' + (ligne?.joueurId ?? 'aucun');
+  elements.pecheSequence.textContent = 'Séquence pêche : ' + (ligne?.sequence ?? '—');
+  elements.pecheZone.textContent = 'Zone pêche : ' + (ligne?.zoneId ?? '—');
+  elements.pechePhase.textContent = 'Phase pêche : ' + (ligne?.phase ?? 'inactive');
+  elements.pecheLignesActives.textContent = 'Lignes actives : ' + salle.state.lignesPeche.size;
+  elements.pecheResultat.textContent =
+    dernierResultat === undefined
+      ? 'Résultat pêche : —'
+      : 'Résultat pêche : ' + dernierResultat.resultat + ' · joueur ' + dernierResultat.joueurId;
 }
 
 function actualiserDiagnostic(
@@ -191,6 +237,8 @@ export async function connecterDiagnosticSalle(
   let sequence = 1;
   let dernièreIntentionEnvoyée: MessageIntentionTir | undefined;
   let dernierCodeDeconnexion: number | undefined;
+  let raisonDeconnexion = '';
+  let dernierResultatPeche: MessageResultatPeche | undefined;
   let etatCombat: EtatCombatInterne = {
     cibleId: null,
     santeJoueur: 100,
@@ -200,6 +248,7 @@ export async function connecterDiagnosticSalle(
     enAttenteReapparition: false,
     dernierResultat: undefined,
     codeDeconnexion: undefined,
+    raisonDeconnexion: '',
   };
 
   const mettreAJourDiagnostic = (): void => {
@@ -216,7 +265,8 @@ export async function connecterDiagnosticSalle(
       santePirate: cible?.sante ?? etatCombat.santePirate,
       pirateNeutralise: cible !== undefined && !cible.vivant,
     };
-    écrireDiagnosticCombat(elements, etatCombat, salle);
+    écrireDiagnosticCombat(elements, etatCombat, salleTypée);
+    écrireDiagnosticPeche(salleTypée, elements, dernierResultatPeche);
   };
 
   salleTypée.onMessage(NOMS_MESSAGES.resultatTir, (message: MessageResultatTir) => {
@@ -227,14 +277,23 @@ export async function connecterDiagnosticSalle(
     mettreAJourDiagnostic();
   });
 
-  salleTypée.onError((code) => {
-    dernierCodeDeconnexion = code;
-    etatCombat.codeDeconnexion = code;
+  salleTypée.onMessage(NOMS_MESSAGES.resultatPeche, (message: MessageResultatPeche) => {
+    dernierResultatPeche = message;
     mettreAJourDiagnostic();
   });
-  salleTypée.onLeave((code) => {
+
+  salleTypée.onError((code, message) => {
     dernierCodeDeconnexion = code;
+    raisonDeconnexion = message || 'Requête refusée par le serveur.';
     etatCombat.codeDeconnexion = code;
+    etatCombat.raisonDeconnexion = raisonDeconnexion;
+    mettreAJourDiagnostic();
+  });
+  salleTypée.onLeave((code, raison) => {
+    dernierCodeDeconnexion = code;
+    raisonDeconnexion = raison ?? 'Connexion fermée par le serveur.';
+    etatCombat.codeDeconnexion = code;
+    etatCombat.raisonDeconnexion = raisonDeconnexion;
     mettreAJourDiagnostic();
   });
 
@@ -326,6 +385,94 @@ export async function connecterDiagnosticSalle(
       codeDeconnexion: etatCombat.codeDeconnexion,
     }),
     lireDeconnexion: () => dernierCodeDeconnexion,
+    preparerPecheE2E: () => {
+      if (!détruite) {
+        salleTypée.send(NOMS_MESSAGES.preparerPecheE2E, { preparation: true });
+      }
+    },
+    avancerPecheE2E: () => {
+      if (détruite) {
+        return;
+      }
+      const ligne = salleTypée.state.lignesPeche.get(salleTypée.sessionId);
+      const délai = ligne
+        ? calculerPrevisionPeche(salleTypée.state.metadonnees.graine, ligne.sequence)
+            .delaiMorsureMs
+        : 0;
+      salleTypée.send(NOMS_MESSAGES.avancerPecheE2E, { deltaMs: délai + 200 });
+    },
+    lancerPeche: () => {
+      if (détruite) {
+        return;
+      }
+      const monde = genererMonde(options.graine);
+      const zone = monde.zonesPeche[0];
+      if (!zone) {
+        return;
+      }
+      const origine = {
+        x: zone.centre.x,
+        y: zone.centre.y + HAUTEUR_YEUX_DIAGNOSTIC,
+        z: zone.centre.z,
+      };
+      const direction = normaliserDirection({
+        x: zone.centre.x - origine.x,
+        y: zone.centre.y - origine.y,
+        z: zone.centre.z - origine.z,
+      });
+      // La séquence E2E choisit un délai de morsure suffisamment large pour
+      // laisser le harnais capturer les deux fenêtres navigateur.
+      const sequencePeche = Math.max(sequence, 5);
+      salleTypée.send(NOMS_MESSAGES.lancerPeche, {
+        sequence: sequencePeche,
+        zoneId: zone.id,
+        origineX: origine.x,
+        origineY: origine.y,
+        origineZ: origine.z,
+        directionX: direction.x,
+        directionY: direction.y,
+        directionZ: direction.z,
+        flotteurX: zone.centre.x,
+        flotteurY: zone.centre.y,
+        flotteurZ: zone.centre.z,
+      });
+      sequence = sequencePeche + 1;
+    },
+    releverPeche: () => {
+      const ligne = salleTypée.state.lignesPeche.get(salleTypée.sessionId);
+      if (!détruite) {
+        salleTypée.send(NOMS_MESSAGES.releverPeche, { sequence: ligne?.sequence ?? 1 });
+      }
+    },
+    annulerPeche: () => {
+      const ligne = salleTypée.state.lignesPeche.get(salleTypée.sessionId);
+      if (!détruite) {
+        salleTypée.send(NOMS_MESSAGES.annulerPeche, { sequence: ligne?.sequence ?? 1 });
+      }
+    },
+    lirePeche: () => {
+      const ligne =
+        salleTypée.state.lignesPeche.get(salleTypée.sessionId) ??
+        [...salleTypée.state.lignesPeche.values()][0];
+      return {
+        lignesActives: salleTypée.state.lignesPeche.size,
+        ligneLocale: ligne
+          ? {
+              joueurId: ligne.joueurId,
+              sequence: ligne.sequence,
+              zoneId: ligne.zoneId,
+              phase: ligne.phase,
+            }
+          : undefined,
+        dernierResultat: dernierResultatPeche,
+      };
+    },
+    quitterSalleE2E: () => {
+      if (!détruite) {
+        détruite = true;
+        void salleTypée.leave();
+      }
+    },
     detruire: () => {
       if (détruite) {
         return;
