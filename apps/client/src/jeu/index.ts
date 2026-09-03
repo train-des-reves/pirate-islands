@@ -3,6 +3,7 @@ export * from './bateau';
 export * from './bateau-pirate';
 export * from './entrees';
 export * from './mouvement';
+export * from './pilotage';
 export * from './pecheur';
 export * from './pirate';
 export * from './pistolet';
