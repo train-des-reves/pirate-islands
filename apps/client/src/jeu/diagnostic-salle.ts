@@ -1,4 +1,5 @@
 import { Client, type Room } from '@colyseus/sdk';
+import { HAUTEUR_TORSE_PIRATE } from '@pirate/coeur-jeu';
 
 import {
   EtatSalleSchema,
@@ -120,11 +121,15 @@ function calculerViseeDeterministe(
     ? pirates.find((pirate) => pirate.identifiant === cibleId && pirate.vivant)
     : undefined;
 
-  let centre: { readonly x: number; readonly y: number; readonly z: number };
+  let centre: { readonly x: number; readonly y: number; readonly z: number } = {
+    x: 0,
+    y: HAUTEUR_TORSE_PIRATE,
+    z: 0,
+  };
   if (cible !== undefined) {
     centre = {
       x: cible.transformation.x,
-      y: cible.transformation.y + 1,
+      y: cible.transformation.y + HAUTEUR_TORSE_PIRATE,
       z: cible.transformation.z,
     };
   } else {
@@ -137,7 +142,7 @@ function calculerViseeDeterministe(
     }
     centre = {
       x: candidate.transformation.x,
-      y: candidate.transformation.y + 1,
+      y: candidate.transformation.y + HAUTEUR_TORSE_PIRATE,
       z: candidate.transformation.z,
     };
   }

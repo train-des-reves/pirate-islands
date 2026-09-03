@@ -518,11 +518,11 @@ declare global {
   }
 }
 
+/** Interface du jeu client exposé au harnais E2E et aux tests. */
 interface JeuClient {
   readonly moteur?: Engine;
   detruire: () => void;
 }
-
 const paramètres = new URLSearchParams(window.location.search);
 const modeE2E =
   import.meta.env.DEV && import.meta.env.VITE_E2E === '1' && paramètres.get('e2e') === '1';

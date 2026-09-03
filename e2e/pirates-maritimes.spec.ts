@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 test.use({ video: 'on' });
+/** Nombre de tirs requis pour neutraliser un pirate au premier tir. */
+const COUPS_NECESSAIRES_PIRATE = Math.ceil(100 / 25);
 
 type EtatMaritime = {
   readonly salleId: string | undefined;
@@ -24,6 +26,7 @@ type CrochetMaritime = {
   readonly lireCombat?: () => {
     readonly santeJoueur: number;
     readonly pirateNeutralise: boolean;
+    readonly enAttenteReapparition?: boolean;
   };
 };
 
@@ -139,9 +142,21 @@ test.describe('rencontre maritime autoritaire', () => {
         )
         .toBeLessThan(100);
       await page.screenshot({ path: 'docs/preuves/pirates-maritimes-attaque-1280x720.png' });
+      await expect
+        .poll(
+          async () =>
+            await page.evaluate(() => {
+              const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetMaritime })
+                .__pirateIslandsE2E;
+              const combat = crochet?.lireCombat?.();
+              return combat ? !combat.enAttenteReapparition && combat.santeJoueur > 0 : false;
+            }),
+          { timeout: 6_000, intervals: [10, 20, 50, 100] },
+        )
+        .toBe(true);
 
       const équipageId = (await lireEtat(page)).bateaux[0]!.id + '-equipage-1';
-      for (let index = 0; index < 4; index += 1) {
+      for (let index = 0; index < COUPS_NECESSAIRES_PIRATE; index += 1) {
         await page.evaluate((id) => {
           const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetMaritime })
             .__pirateIslandsE2E;
@@ -150,9 +165,9 @@ test.describe('rencontre maritime autoritaire', () => {
         await page.waitForTimeout(180);
       }
 
-      await expect
-        .poll(async () => (await lireEtat(page)).bateaux[0]?.statut, { timeout: 5_000 })
-        .toBe('detruit');
+     await expect
+       .poll(async () => (await lireEtat(page)).bateaux[0]?.statut, { timeout: 5_000 })
+       .toBe('detruit');
       await expect.poll(async () => (await lireEtat(second)).bateaux[0]?.statut).toBe('detruit');
       await expect
         .poll(
