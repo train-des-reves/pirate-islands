@@ -5,6 +5,7 @@ import type {
   MessageIntentionTir,
   MessageLancerPeche,
   MessagePing,
+  MessagePositionE2E,
   MessagePreparerPecheE2E,
   MessageReleverPeche,
   MessageTransformationJoueur,
@@ -499,6 +500,31 @@ export function validerMessageDegatsE2E(valeur: unknown): ResultatValidation<Mes
 
 export function estMessageDegatsE2EValide(valeur: unknown): valeur is MessageDegatsE2E {
   return validerMessageDegatsE2E(valeur).valide;
+}
+
+/** Valide la position du harnais E2E, sans l’ouvrir aux clients de production. */
+export function validerMessagePositionE2E(valeur: unknown): ResultatValidation<MessagePositionE2E> {
+  if (
+    !estObjetSimple(valeur) ||
+    !possedeUniquement(valeur, ['position']) ||
+    !('position' in valeur)
+  ) {
+    return resultatErreur('Le message E2E de position doit contenir uniquement position.');
+  }
+
+  if (!estPositionValide(valeur.position)) {
+    return resultatErreur('La position E2E est invalide.');
+  }
+
+  const position = valeur.position;
+  return {
+    valide: true,
+    valeur: { position: { x: position.x, y: position.y, z: position.z } },
+  };
+}
+
+export function estMessagePositionE2EValide(valeur: unknown): valeur is MessagePositionE2E {
+  return validerMessagePositionE2E(valeur).valide;
 }
 
 export function validerIdentifiantSalle(valeur: unknown): ResultatValidation<string> {

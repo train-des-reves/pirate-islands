@@ -8,10 +8,11 @@ import {
   NOMS_MESSAGES,
   NOM_SALLE_JEU,
   SANTE_JOUEUR_MAXIMALE,
+  SANTE_PIRATE_MAXIMALE,
   type EtatSalle,
   type MessageResultatTir,
 } from '@pirate/protocole';
-import { resoudreCibleTiree } from '@pirate/coeur-jeu';
+import { genererMonde, resoudreCibleTiree } from '@pirate/coeur-jeu';
 import { démarrerServeur, type ServeurDemarre } from '../apps/serveur/src/server.js';
 
 let serveur: ServeurDemarre | undefined;
@@ -102,10 +103,7 @@ async function attendreCondition(
   });
 }
 
-async function attendrePirates(
-  salle: Room<unknown, EtatSalle>,
-  nombre: number,
-): Promise<void> {
+async function attendrePirates(salle: Room<unknown, EtatSalle>, nombre: number): Promise<void> {
   if (salle.state.pirates.size >= nombre) {
     return;
   }
@@ -128,9 +126,7 @@ async function attendrePirates(
   });
 }
 
-function attendreResultatTir(
-  salle: Room<unknown, EtatSalle>,
-): Promise<MessageResultatTir> {
+function attendreResultatTir(salle: Room<unknown, EtatSalle>): Promise<MessageResultatTir> {
   return new Promise((résoudre, rejeter) => {
     let détacher = (): void => undefined;
     const délai = setTimeout(() => {
@@ -209,7 +205,10 @@ function cibleDeterministe(
       vivant: entrée.vivant,
     }));
     if (resoudreCibleTiree(origine, direction, cibles) === pirate.identifiant) {
-      return { identifiant: pirate.identifiant, intention: creerIntentionDeTir(origine, direction) };
+      return {
+        identifiant: pirate.identifiant,
+        intention: creerIntentionDeTir(origine, direction),
+      };
     }
   }
 
@@ -217,6 +216,104 @@ function cibleDeterministe(
 }
 
 describe('SalleJeu Colyseus', () => {
+  it('synchronise l’IA terrestre, ses dégâts et la mort d’un pirate entre deux observateurs', async () => {
+    serveurModeE2E = true;
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient, undefined, {
+      graine: 'rencontre-terrestre',
+    });
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId, {
+      graine: 'rencontre-terrestre',
+    });
+    await attendreNombreJoueurs(premièreSalle, 2);
+
+    const île = genererMonde('rencontre-terrestre').iles[0];
+    if (!île) {
+      throw new Error('La rencontre doit disposer d’une première île.');
+    }
+    const positionJoueur = île.apparitionJoueur.position;
+    premièreSalle.send(NOMS_MESSAGES.positionE2E, { position: positionJoueur });
+
+    await attendreCondition(
+      secondeSalle,
+      () =>
+        Math.abs(
+          (secondeSalle.state.joueurs.get(premièreSalle.sessionId)?.transformation.x ?? 0) -
+            positionJoueur.x,
+        ) < 0.001,
+      'le joueur E2E n’a pas été placé sur l’île',
+    );
+    const pirateInitial = [...premièreSalle.state.pirates.values()].find((pirate) =>
+      pirate.identifiant.startsWith(île.id + '-'),
+    );
+    if (!pirateInitial) {
+      throw new Error('La première île doit disposer d’un pirate.');
+    }
+    const pirateId = pirateInitial.identifiant;
+
+    await expect
+      .poll(() => premièreSalle.state.pirates.get(pirateId)?.statut, { timeout: 2_000 })
+      .toMatch(/poursuite|attaque/);
+    await expect
+      .poll(() => premièreSalle.state.joueurs.get(premièreSalle.sessionId)?.sante, {
+        timeout: 5_000,
+      })
+      .toBeLessThan(SANTE_JOUEUR_MAXIMALE);
+
+    await attendreCondition(
+      secondeSalle,
+      () =>
+        secondeSalle.state.pirates.get(pirateId)?.sante ===
+        premièreSalle.state.pirates.get(pirateId)?.sante,
+      'la santé du pirate n’est pas identique chez le second observateur',
+    );
+
+    for (let index = 0; index < 4; index += 1) {
+      const pirate = premièreSalle.state.pirates.get(pirateId);
+      const joueur = premièreSalle.state.joueurs.get(premièreSalle.sessionId);
+      if (!pirate || !joueur || !joueur.vivant) {
+        break;
+      }
+      const origine = {
+        x: joueur.transformation.x,
+        y: joueur.transformation.y + 1.62,
+        z: joueur.transformation.z,
+      };
+      const vers = {
+        x: pirate.transformation.x - origine.x,
+        y: pirate.transformation.y + 1 - origine.y,
+        z: pirate.transformation.z - origine.z,
+      };
+      const longueur = Math.hypot(vers.x, vers.y, vers.z);
+      const résultat = attendreResultatTir(premièreSalle);
+      premièreSalle.send(NOMS_MESSAGES.intentionTir, {
+        ...creerIntentionDeTir(
+          origine,
+          {
+            x: vers.x / longueur,
+            y: vers.y / longueur,
+            z: vers.z / longueur,
+          },
+          index + 1,
+        ),
+      });
+      await résultat;
+      await new Promise((résoudre) => setTimeout(résoudre, 160));
+    }
+
+    await expect
+      .poll(() => premièreSalle.state.pirates.get(pirateId)?.sante, { timeout: 3_000 })
+      .toBe(0);
+    await expect
+      .poll(() => premièreSalle.state.pirates.get(pirateId)?.vivant, { timeout: 3_000 })
+      .toBe(false);
+    await expect
+      .poll(() => secondeSalle.state.pirates.get(pirateId)?.vivant, { timeout: 3_000 })
+      .toBe(false);
+    expect(secondeSalle.state.pirates.get(pirateId)?.sante).toBe(SANTE_PIRATE_MAXIMALE - 100);
+  }, 30_000);
+
   it('crée deux identités serveur distinctes et synchronise leur apparition', async () => {
     const premierClient = await ouvrirClient();
     const premièreSalle = await rejoindreSalle(premierClient, undefined, {

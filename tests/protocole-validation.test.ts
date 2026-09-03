@@ -8,6 +8,7 @@ import {
   estMessageDegatsE2EValide,
   estMessageIntentionTirValide,
   estMessagePingValide,
+  estMessagePositionE2EValide,
   estOptionsConnexionValides,
   validerMessageAnnulerPeche,
   validerMessageAvancerPecheE2E,
@@ -15,6 +16,7 @@ import {
   validerMessageIntentionTir,
   validerMessageLancerPeche,
   validerMessagePing,
+  validerMessagePositionE2E,
   validerMessageReleverPeche,
   validerOptionsConnexion,
 } from '@pirate/protocole';
@@ -126,6 +128,16 @@ describe('validation runtime du protocole', () => {
     expect(validerMessageDegatsE2E({ degats: Number.NaN }).valide).toBe(false);
     expect(validerMessageDegatsE2E({ degats: 25, sante: 100 }).valide).toBe(false);
     expect(validerMessageDegatsE2E({}).valide).toBe(false);
+  });
+
+  it('valide le positionnement E2E borné et rejette les champs parasites', () => {
+    expect(estMessagePositionE2EValide({ position: { x: 1, y: 2, z: 3 } })).toBe(true);
+    expect(validerMessagePositionE2E({ position: { x: Number.NaN, y: 0, z: 0 } }).valide).toBe(
+      false,
+    );
+    expect(
+      validerMessagePositionE2E({ position: { x: 1, y: 2, z: 3 }, sessionId: 'usurpée' }).valide,
+    ).toBe(false);
   });
 
   it('valide les commandes de pêche sans identité ni horloge fournie par le client', () => {
