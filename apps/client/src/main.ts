@@ -16,10 +16,20 @@ import { estReponseSante, type OptionsConnexion } from '@pirate/protocole';
 
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
 import { construireGalerieBateauxPiratesE2E } from './jeu/bateau-pirate';
+import { construireControleBateauMouvement } from './jeu/bateau-mouvement';
+import { construireHarnaisPilotage } from './jeu/harnais-pilotage';
+import { collisionsRivageDepuisMonde, positionBateauEnMer } from './jeu/contraintes-navigation';
+import { créerDescripteurBateau } from './jeu/bateau';
+import { monterInvitePilotage } from './interface/presenter-pilotage';
 import { ACTIONS_JEU, creerEtatActions, GestionnaireEntrees, type ActionJeu } from './jeu/entrees';
 import { installerEtiquettesPecheurs } from './jeu/etiquette-pecheur';
 import { construireBacASable } from './jeu/monde-test';
-import { creerEtatJoueur, simulerMouvementParPasFixes, type EtatJoueur } from './jeu/mouvement';
+import {
+  creerEtatJoueur,
+  creerMondeCollision,
+  simulerMouvementParPasFixes,
+  type EtatJoueur,
+} from './jeu/mouvement';
 import { construireGaleriePiratesE2E } from './jeu/pirate';
 import { PistoletPremierePersonne } from './jeu/pistolet';
 import {
@@ -442,6 +452,16 @@ interface EtatJeuE2E {
     readonly derniereIntention: IntentionTir | undefined;
     readonly intentions: readonly IntentionTir[];
   };
+  readonly pilotage?: {
+    readonly mode: string;
+    readonly invite: string;
+    readonly positionJoueur: { readonly x: number; readonly y: number; readonly z: number };
+    readonly positionBateau: { readonly x: number; readonly y: number; readonly z: number };
+    readonly rotationBateau: number;
+    readonly vitesse: number;
+    readonly collision: string;
+    readonly intensiteSillage: number;
+  };
   readonly peche: {
     readonly modeActif: boolean;
     readonly vue: string;
@@ -473,6 +493,10 @@ declare global {
       reinitialiser: () => void;
       tirer: (nombre?: number) => void;
       avancerTemps: (deltaMs: number) => void;
+      agir?: () => void;
+      debarquer?: () => void;
+      deplacerBord?: (offset: { x: number; y?: number; z: number }) => void;
+      piloter?: (intentions: { poussee: number; gouvernail: number }) => void;
       lireEtatViseurIa?: () => EtatVisualiseurIa;
       afficherInstantViseurIa?: (instant: number) => void;
       forcerEtatCanne?: (vue: string) => void;
@@ -538,6 +562,7 @@ const modePecheursDistants = modeE2E && paramètres.get('vue') === 'pecheurs';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
+const modePilotage = paramètres.get('pilotage') === '1';
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
 const cameraDemandée = paramètres.get('camera');
@@ -568,14 +593,14 @@ conteneurApplication.dataset.mode = modeBateauxPirates
     ? 'pirates-maritimes'
     : modeViseurIa
       ? 'ia'
+      : modePilotage
+        ? 'pilote'
       : modePecheursDistants
         ? 'pecheurs-distants'
         : modePirates
           ? 'pirates'
-          : modePresentationCanne
+          : modePresentationCanne || modePresentationPeche
             ? 'presentation'
-            : modePresentationPeche
-              ? 'presentation'
               : modeDiagnosticSalle
                 ? 'diagnostic-salle'
                 : modeMonde
@@ -608,6 +633,7 @@ conteneurApplication.dataset.diagnostics =
   modeBateauxPirates ||
   modePiratesMaritimes ||
   modeViseurIa ||
+  modePilotage ||
   modePecheursDistants ||
   modePirates ||
   (modeMonde && modeE2E)
@@ -958,6 +984,230 @@ function construireScene(): JeuClient | undefined {
           lumière.dispose();
           lumièreAvant.dispose();
           moteur.dispose();
+        },
+      };
+    }
+
+    if (modePilotage) {
+      const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera: 'rivage' });
+      const controle = construireControleBateauMouvement(scene, mondeBabylon.bateau.racine);
+      const invite = monterInvitePilotage(conteneurApplication);
+      const mondePied = creerMondeCollision([]);
+      const positionBateau = positionBateauEnMer(monde);
+      const descripteur = créerDescripteurBateau(
+        { x: positionBateau.x, y: positionBateau.y, z: positionBateau.z },
+        mondeBabylon.bateau.descripteur.rotationY,
+        mondeBabylon.bateau.descripteur.id,
+      );
+      const ancreEmb = descripteur.ancrages.find((ancre) => ancre.type === 'embarquement');
+      const positionInitiale = ancreEmb
+        ? { x: ancreEmb.position.x, y: ancreEmb.position.y + 0.5, z: ancreEmb.position.z }
+        : { x: positionBateau.x, y: positionBateau.y + 1.7, z: positionBateau.z - 3 };
+
+      const harnais = construireHarnaisPilotage({
+        descripteur,
+        mondePied,
+        collisionsBateau: collisionsRivageDepuisMonde(monde),
+        positionBateauInitiale: positionBateau,
+        positionInitiale,
+        controleBateau: controle,
+        surEtat: (etat) => {
+          invite.mettreAJour(etat);
+          conteneurApplication.dataset.modePilotage = etat.mode;
+          conteneurApplication.dataset.invitePilotage = etat.invite;
+          conteneurApplication.dataset.vitesseBateau = etat.vitesse.toFixed(3);
+          conteneurApplication.dataset.sillageBateau = etat.intensiteSillage.toFixed(3);
+          conteneurApplication.dataset.collisionBateau = etat.collision;
+        },
+      });
+
+      const camera = mondeBabylon.camera;
+      camera.fov = 1.05;
+      camera.position.set(positionBateau.x, positionBateau.y + 4.5, positionBateau.z - 12);
+      camera.setTarget(new Vector3(positionBateau.x, positionBateau.y + 1.4, positionBateau.z));
+
+      let enPausePilotage = false;
+      const mettreEnPausePilotage = (): void => {
+        enPausePilotage = true;
+        overlayPause.hidden = false;
+        conteneurApplication.dataset.pause = 'oui';
+        boutonReprendreJeu.focus();
+      };
+      const reprendrePilotage = (): void => {
+        enPausePilotage = false;
+        overlayPause.hidden = true;
+        conteneurApplication.dataset.pause = 'non';
+        boutonReprendreJeu.blur();
+        if (modeE2E) {
+          entreesPilotage.simulerVerrouillage(true);
+        } else {
+          try {
+            void Promise.resolve(canvasJeu.requestPointerLock?.()).catch(() => {
+              // Le reverrouillage peut être refusé tant que le pointeur n'est pas
+              // re-autorisé par le navigateur ; l'état de pause reste sûr.
+            });
+          } catch {
+            // Ignoré : la reprise se fera au prochain clic dans la scène.
+          }
+        }
+      };
+
+      const entreesPilotage = new GestionnaireEntrees({
+        cible: window,
+        document: window.document,
+        elementVerrouillage: canvasJeu,
+        liaisons: construireLiaisonsEntrees(reglages.applique),
+        onChangementVerrouillage: (verrouille: boolean) => {
+          // Le clic dans la scène après pause reverrouille le pointeur et
+          // reprend la simulation.
+          if (verrouille && enPausePilotage) {
+            reprendrePilotage();
+          }
+        },
+        onPause: () => {
+          // Échap libère le pointeur, ouvre la pause et, si le joueur était à
+          // la barre, le rend à bord.
+          mettreEnPausePilotage();
+          if (harnais.lireEtat().mode === 'pilote') {
+            harnais.agir();
+          }
+        },
+      });
+      entreesPilotage.attacher();
+      reprendreJeuActif = reprendrePilotage;
+      rafraichirInterfaceJeu = () => {
+        conteneurApplication.dataset.pause = enPausePilotage ? 'oui' : 'non';
+        overlayPause.hidden = !enPausePilotage;
+      };
+
+      if (modeE2E) {
+        window.__pirateIslandsE2E = {
+          verrouillerPointeur: () => undefined,
+          libererPointeur: () => undefined,
+          lireEtat: () => {
+            const etat = harnais.lireEtat();
+            return {
+              position: etat.positionJoueur,
+              camera: { lacet: 0, tangage: 0 },
+              pause: enPausePilotage,
+              pointeurVerrouille: false,
+              collision: 'aucune' as const,
+              reglages: clonerReglagesPourLecture(reglages.applique),
+              tir: {
+                compteur: 0,
+                etat: { recul: 0, eclairBouche: false },
+                derniereIntention: undefined,
+                intentions: [],
+              },
+              peche: {
+                modeActif: false,
+                vue: 'rangee',
+                sequence: 0,
+                invite: null,
+                statut: '',
+              },
+              pilotage: etat as unknown as NonNullable<EtatJeuE2E['pilotage']>,
+            };
+          },
+          lireReglages: () => clonerReglagesPourLecture(reglages.applique),
+          reinitialiser: () => harnais.reinitialiser(),
+          agir: () => harnais.agir(),
+          piloter: (intentions) => harnais.piloter(intentions),
+          tirer: () => undefined,
+          avancerTemps: (deltaMs) =>
+            harnais.avancerTemps((Number.isFinite(deltaMs) ? deltaMs : 0) / 1000),
+        };
+        (window.__pirateIslandsE2E as { debarquer?: () => void }).debarquer = () =>
+          harnais.debarquer();
+        (
+          window.__pirateIslandsE2E as {
+            deplacerBord?: (o: { x: number; y?: number; z: number }) => void;
+          }
+        ).deplacerBord = (offset) => harnais.deplacerBord(offset);
+      }
+
+      scene.executeWhenReady(() => {
+        conteneurApplication.dataset.bateau = mondeBabylon.bateau.descripteur.id;
+        conteneurApplication.dataset.bateauAncrages = String(
+          mondeBabylon.bateau.descripteur.ancrages.length,
+        );
+        conteneurApplication.dataset.bateauSurfaces = String(mondeBabylon.bateau.surfaces.length);
+        conteneurApplication.dataset.bateauCollisions = String(
+          mondeBabylon.bateau.collisions.length,
+        );
+        conteneurApplication.dataset.scene = 'ready';
+      });
+
+      // Horloge de simulation propre au mode pilotage. En production, on
+      // accumule le temps réel pour que la simulation du bateau soit
+      // indépendante du nombre d'images ; en mode E2E, `avancerTemps` reste la
+      // seule source de progression.
+      let dernierTemps = performance.now();
+      const observer = scene.onAfterRenderObservable.add(() => {
+        const suivant = harnais.lireEtat();
+        invite.mettreAJour(suivant);
+      });
+      const boucle = (): void => {
+        const maintenant = performance.now();
+        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
+        dernierTemps = maintenant;
+        const actions = entreesPilotage.lireEtat();
+        const transitions = entreesPilotage.lireTransitions();
+        // « interagir » est une action transitoire : on ne déclenche la
+        // transition qu'au front montant, jamais en maintenant la touche.
+        // En mode E2E, la simulation reste pilotée par `avancerTemps` ; seule
+        // l'interaction issue des vraies touches est traitée ici.
+        if (transitions.appuyees.includes('interagir')) {
+          harnais.agir();
+        }
+        if (!modeE2E) {
+          if (!enPausePilotage) {
+            harnais.boucle(
+              {
+                avancer: actions.avancer,
+                reculer: actions.reculer,
+                gauche: actions.gauche,
+                droite: actions.droite,
+              },
+              deltaSecondes,
+            );
+          }
+        }
+        // La caméra suit le passager du bateau pour rendre la marée et la
+        // cale visibles : derrière lui selon le lacet de la caméra.
+        const etat = harnais.lireEtat();
+        const position = etat.positionJoueur;
+        const lacet = mondeBabylon.camera.rotation.y;
+        const distance = 3.4;
+        const hauteur = 2.1;
+        mondeBabylon.camera.position.set(
+          position.x - Math.sin(lacet) * distance,
+          position.y + hauteur,
+          position.z - Math.cos(lacet) * distance,
+        );
+        mondeBabylon.camera.setTarget(new Vector3(position.x, position.y + 0.4, position.z));
+        scene.render();
+      };
+      moteur.runRenderLoop(boucle);
+      const redimensionner = (): void => moteur.resize();
+      window.addEventListener('resize', redimensionner);
+
+      return {
+        moteur,
+        detruire: () => {
+          entreesPilotage.detacher();
+          window.removeEventListener('resize', redimensionner);
+          scene.onAfterRenderObservable.remove(observer);
+          moteur.stopRenderLoop(boucle);
+          invite.detruire();
+          controle.liberer();
+          mondeBabylon.liberer();
+          moteur.dispose();
+          reprendreJeuActif = undefined;
+          rafraichirInterfaceJeu = undefined;
+          if (modeE2E) {
+            delete window.__pirateIslandsE2E;
+          }
         },
       };
     }

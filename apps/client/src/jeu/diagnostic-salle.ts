@@ -121,11 +121,7 @@ function calculerViseeDeterministe(
     ? pirates.find((pirate) => pirate.identifiant === cibleId && pirate.vivant)
     : undefined;
 
-  let centre: { readonly x: number; readonly y: number; readonly z: number } = {
-    x: 0,
-    y: HAUTEUR_TORSE_PIRATE,
-    z: 0,
-  };
+  let centre: { readonly x: number; readonly y: number; readonly z: number };
   if (cible !== undefined) {
     centre = {
       x: cible.transformation.x,

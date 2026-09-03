@@ -118,6 +118,28 @@ URL déterministe : `http://127.0.0.1:4173/?e2e=1&presentation=regles-peche&grai
 
 La capture composite attendue est `docs/preuves/peche-regles-1280x720.png`.
 
+## Preuve visuelle — embarquement et pilotage du bateau de pêche
+
+Scénario déterministe : ouvrir `/?e2e=1&graine=mvp-defaut&pilotage=1`. Le crochet
+E2E simule le parcours : invite d'embarquement, prise de barre, accélération,
+virage, collision bloquée au rivage, sortie de barre et marche à bord vers la
+cale. Le relecteur vérifie l'invite « Prendre la barre », la vitesse et le
+sillage qui augmentent, le blocage sur le rivage sans traversée, la sortie de
+barre et le rattachement du passager au référentiel du bateau.
+
+Commande exacte :
+
+```bash
+pnpm exec playwright test e2e/pilotage.spec.ts --workers=1
+```
+
+URL déterministe : `http://127.0.0.1:4173/?e2e=1&graine=mvp-defaut&pilotage=1`.
+
+La branche produit `pilotage-barre-1280x720.png`,
+`pilotage-sillage-1280x720.png`, `pilotage-collision-rivage-1280x720.png`,
+`pilotage-sortie-barre-1280x720.png` et `pilotage-cale-1280x720.png`, ainsi que
+la vidéo `pilotage-bateau.webm`.
+
 ## Preuve de la rencontre maritime
 
 Commande exacte :
