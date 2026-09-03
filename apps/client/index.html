@@ -51,6 +51,35 @@
         </p>
         <p class="peche-statut" data-testid="peche-statut" role="status" hidden>Canne rangée</p>
       </aside>
+      <aside class="ath-combat" data-testid="ath-combat" hidden aria-live="polite">
+        <div class="ath-combat__en-tete">
+          <p class="ath-combat__eyebrow">Engagement</p>
+          <p class="ath-combat__cible" data-testid="ath-combat-cible">Aucune cible</p>
+        </div>
+        <div class="ath-combat__ligne">
+          <div class="ath-combat__libelle">
+            <span>Votre santé</span>
+            <output data-testid="ath-combat-sante-joueur">100 / 100</output>
+          </div>
+          <div class="ath-combat__barre" role="progressbar" aria-label="Santé du joueur" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+            <span data-testid="ath-combat-barre-joueur"></span>
+          </div>
+        </div>
+        <div class="ath-combat__ligne ath-combat__ligne--cible">
+          <div class="ath-combat__libelle">
+            <span>Santé pirate</span>
+            <output data-testid="ath-combat-sante-cible">0 / 100</output>
+          </div>
+          <div class="ath-combat__barre" role="progressbar" aria-label="Santé du pirate" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-testid="ath-combat-barre-cible"></span>
+          </div>
+        </div>
+        <p class="ath-combat__resultat" data-testid="ath-combat-resultat">En attente de tir</p>
+        <div class="ath-combat__mort" data-testid="ath-combat-mort" hidden>
+          <strong>Vous êtes tombé</strong>
+          <span>Réapparition en cours…</span>
+        </div>
+      </aside>
       <aside class="diagnostic-salle" data-testid="diagnostic-salle" hidden aria-live="polite">
         <p class="diagnostic-salle-eyebrow">Diagnostic E2E · Salle Colyseus</p>
         <h2>Équipage connecté</h2>

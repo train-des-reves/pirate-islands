@@ -102,6 +102,9 @@ test('tir accepté, raté sans effet, mort et réapparition côté serveur', asy
   await expect(page.getByTestId('diagnostic-salle')).toBeVisible();
   await expect(page.locator('#app')).toHaveAttribute('data-diagnostics', 'actifs');
   await attendreCrochet(page);
+  await expect(page.getByTestId('ath-combat')).toBeVisible();
+  await expect(page.getByTestId('ath-combat-sante-joueur')).toHaveText('100 / 100');
+  await expect(page.getByTestId('ath-combat-cible')).toHaveText('Aucune cible');
 
   const initial = await lireCombat(page);
   expect(initial.santeJoueur).toBe(100);
@@ -123,6 +126,9 @@ test('tir accepté, raté sans effet, mort et réapparition côté serveur', asy
     .poll(async () => (await lireCombat(page)).santePirate, { timeout: 2_000 })
     .toBeLessThan(100);
   await expect(page.getByTestId('combat-cible')).toContainText('Cible : ');
+  await expect(page.getByTestId('ath-combat-cible')).toContainText('Pirate · ');
+  await expect(page.getByTestId('ath-combat-sante-cible')).toHaveText('75 / 100');
+  await expect(page.getByTestId('ath-combat-resultat')).toHaveText('Impact confirmé · 25 dégâts');
   await page.screenshot({
     path: 'docs/preuves/combat-tir-accepte-1280x720.png',
     fullPage: false,
@@ -151,6 +157,9 @@ test('tir accepté, raté sans effet, mort et réapparition côté serveur', asy
     .poll(async () => (await lireCombat(page)).enAttenteReapparition, { timeout: 5_000 })
     .toBe(true);
   await expect(page.getByTestId('combat-reapparition')).toHaveText('En attente : oui');
+  await expect(page.getByTestId('ath-combat-mort')).toBeVisible();
+  await expect(page.getByTestId('ath-combat-mort')).toContainText('Réapparition en cours');
+  await expect(page.getByTestId('ath-combat-sante-joueur')).toHaveText('0 / 100');
   await page.screenshot({
     path: 'docs/preuves/combat-joueur-mort-1280x720.png',
     fullPage: false,
@@ -163,10 +172,10 @@ test('tir accepté, raté sans effet, mort et réapparition côté serveur', asy
   await expect
     .poll(async () => (await lireCombat(page)).enAttenteReapparition, { timeout: 6_000 })
     .toBe(false);
-  await expect
-    .poll(async () => (await lireCombat(page)).santeJoueur, { timeout: 6_000 })
-    .toBe(100);
+  await expect.poll(async () => (await lireCombat(page)).santeJoueur, { timeout: 6_000 }).toBe(100);
   await expect(page.getByTestId('combat-reapparition')).toHaveText('En attente : non');
+  await expect(page.getByTestId('ath-combat-mort')).toBeHidden();
+  await expect(page.getByTestId('ath-combat-sante-joueur')).toHaveText('100 / 100');
   await page.screenshot({
     path: 'docs/preuves/combat-reapparition-1280x720.png',
     fullPage: false,

@@ -13,6 +13,11 @@ import {
   type OptionsConnexion,
 } from '@pirate/protocole';
 import { calculerPrevisionPeche, genererMonde, normaliserDirection } from '@pirate/coeur-jeu';
+import {
+  afficherAthCombat,
+  construireEtatAthCombat,
+  type ElementsAthCombat,
+} from '../interface/ath-combat';
 
 export interface ElementsDiagnosticSalle {
   readonly conteneur: HTMLElement;
@@ -32,6 +37,7 @@ export interface ElementsDiagnosticSalle {
   readonly pechePhase: HTMLElement;
   readonly pecheLignesActives: HTMLElement;
   readonly pecheResultat: HTMLElement;
+  readonly athCombat?: ElementsAthCombat;
 }
 
 /** État de combat exposé au harnais E2E, jamais fourni au serveur. */
@@ -96,7 +102,11 @@ interface EtatCombatInterne {
   raisonDeconnexion: string;
 }
 
-function écrireDiagnosticCombat(elements: ElementsDiagnosticSalle, etat: EtatCombatInterne): void {
+function écrireDiagnosticCombat(
+  elements: ElementsDiagnosticSalle,
+  etat: EtatCombatInterne,
+  salle: Room<unknown, EtatSalle>,
+): void {
   elements.cible.textContent = 'Cible : ' + (etat.cibleId ?? 'aucune');
   elements.santeJoueur.textContent = 'Santé joueur : ' + etat.santeJoueur;
   elements.santePirate.textContent = 'Santé pirate : ' + etat.santePirate;
@@ -114,6 +124,17 @@ function écrireDiagnosticCombat(elements: ElementsDiagnosticSalle, etat: EtatCo
     const neutralise = dernier.pirateNeutralise ? ' · neutralisé' : '';
     elements.resultat.textContent =
       'Dernier tir : cible ' + cible + ' · dégâts ' + dernier.degats + neutralise;
+  }
+
+  if (elements.athCombat !== undefined) {
+    const joueur = lireJoueurLocal(salle);
+    if (joueur !== undefined) {
+      const cible = etat.cibleId ? salle.state.pirates.get(etat.cibleId) : undefined;
+      afficherAthCombat(
+        elements.athCombat,
+        construireEtatAthCombat(joueur, cible, etat.dernierResultat),
+      );
+    }
   }
 }
 
@@ -244,7 +265,7 @@ export async function connecterDiagnosticSalle(
       santePirate: cible?.sante ?? etatCombat.santePirate,
       pirateNeutralise: cible !== undefined && !cible.vivant,
     };
-    écrireDiagnosticCombat(elements, etatCombat);
+    écrireDiagnosticCombat(elements, etatCombat, salleTypée);
     écrireDiagnosticPeche(salleTypée, elements, dernierResultatPeche);
   };
 

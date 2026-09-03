@@ -101,7 +101,7 @@ function normaliserAngle(angle: number): number {
     return 0;
   }
   const deuxPi = Math.PI * 2;
-  const normalisé = ((angle + Math.PI) % deuxPi + deuxPi) % deuxPi - Math.PI;
+  const normalisé = ((((angle + Math.PI) % deuxPi) + deuxPi) % deuxPi) - Math.PI;
   return normalisé === -Math.PI ? Math.PI : normalisé;
 }
 
@@ -119,9 +119,7 @@ const etatInversion = document.querySelector<HTMLElement>('[data-testid="etat-in
 const messageReglages = document.querySelector<HTMLElement>('[data-testid="reglages-message"]');
 const pecheInvite = document.querySelector<HTMLElement>('[data-testid="peche-invite"]');
 const pecheStatut = document.querySelector<HTMLElement>('[data-testid="peche-statut"]');
-const pecheInviteTexte = document.querySelector<HTMLElement>(
-  '[data-testid="peche-invite-texte"]',
-);
+const pecheInviteTexte = document.querySelector<HTMLElement>('[data-testid="peche-invite-texte"]');
 const boutonReprendre = document.querySelector<HTMLButtonElement>('[data-testid="reprendre-jeu"]');
 const boutonOuvrirReglages = document.querySelector<HTMLButtonElement>(
   '[data-testid="ouvrir-reglages"]',
@@ -168,9 +166,25 @@ const combatReapparition = document.querySelector<HTMLElement>(
   '[data-testid="combat-reapparition"]',
 );
 const combatResultat = document.querySelector<HTMLElement>('[data-testid="combat-resultat"]');
-const combatDeconnexion = document.querySelector<HTMLElement>(
-  '[data-testid="combat-deconnexion"]',
+const combatDeconnexion = document.querySelector<HTMLElement>('[data-testid="combat-deconnexion"]');
+const athCombat = document.querySelector<HTMLElement>('[data-testid="ath-combat"]');
+const athCombatCible = document.querySelector<HTMLElement>('[data-testid="ath-combat-cible"]');
+const athCombatSanteJoueur = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-sante-joueur"]',
 );
+const athCombatBarreJoueur = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-barre-joueur"]',
+);
+const athCombatSanteCible = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-sante-cible"]',
+);
+const athCombatBarreCible = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-barre-cible"]',
+);
+const athCombatResultat = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-resultat"]',
+);
+const athCombatMort = document.querySelector<HTMLElement>('[data-testid="ath-combat-mort"]');
 const pecheJoueur = document.querySelector<HTMLElement>('[data-testid="peche-joueur"]');
 const pecheSequence = document.querySelector<HTMLElement>('[data-testid="peche-sequence"]');
 const pecheZone = document.querySelector<HTMLElement>('[data-testid="peche-zone"]');
@@ -232,6 +246,14 @@ if (
   !combatReapparition ||
   !combatResultat ||
   !combatDeconnexion ||
+  !athCombat ||
+  !athCombatCible ||
+  !athCombatSanteJoueur ||
+  !athCombatBarreJoueur ||
+  !athCombatSanteCible ||
+  !athCombatBarreCible ||
+  !athCombatResultat ||
+  !athCombatMort ||
   !pecheJoueur ||
   !pecheSequence ||
   !pecheZone ||
@@ -426,26 +448,6 @@ for (const [action, bouton] of boutonsTouches) {
 
 window.addEventListener('keydown', capturerToucheReglage, true);
 afficherReglages(reglages);
-const diagnosticSalleJeu = diagnosticSalle;
-const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
-  conteneur: diagnosticSalleJeu,
-  identifiantSalle: diagnosticSalleId,
-  sessionId: diagnosticSessionId,
-  nombreJoueurs: diagnosticNombreJoueurs,
-  erreur: diagnosticSalleErreur,
-  cible: combatCible,
-  santeJoueur: combatSanteJoueur,
-  santePirate: combatSantePirate,
-  reapparition: combatReapparition,
-  resultat: combatResultat,
-  deconnexion: combatDeconnexion,
-  pecheJoueur,
-  pecheSequence,
-  pecheZone,
-  pechePhase,
-  pecheLignesActives,
-  pecheResultat,
-};
 const indicateurTir = diagnosticTir;
 const panneauAccueilElement = panneauAccueil;
 const formulaireConnexionElement = formulaireConnexion;
@@ -612,6 +614,40 @@ const modeMonde =
   paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
+const diagnosticSalleJeu = diagnosticSalle;
+const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
+  conteneur: diagnosticSalleJeu,
+  identifiantSalle: diagnosticSalleId,
+  sessionId: diagnosticSessionId,
+  nombreJoueurs: diagnosticNombreJoueurs,
+  erreur: diagnosticSalleErreur,
+  cible: combatCible,
+  santeJoueur: combatSanteJoueur,
+  santePirate: combatSantePirate,
+  reapparition: combatReapparition,
+  resultat: combatResultat,
+  deconnexion: combatDeconnexion,
+  pecheJoueur,
+  pecheSequence,
+  pecheZone,
+  pechePhase,
+  pecheLignesActives,
+  pecheResultat,
+  ...(modeCombatE2E
+    ? {
+        athCombat: {
+          conteneur: athCombat,
+          cible: athCombatCible,
+          barreJoueur: athCombatBarreJoueur,
+          valeurJoueur: athCombatSanteJoueur,
+          barreCible: athCombatBarreCible,
+          valeurCible: athCombatSanteCible,
+          resultat: athCombatResultat,
+          mort: athCombatMort,
+        },
+      }
+    : {}),
+};
 
 conteneurApplication.dataset.mode = modeBateauxPirates
   ? 'bateaux-pirates'
@@ -667,15 +703,15 @@ if (modeViseurIa) {
   document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Harnais visuel E2E · MVP-2G');
   document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('IA pirate');
 } else if (modePecheursDistants) {
-  document
-    .querySelector<HTMLElement>('.eyebrow')
-    ?.replaceChildren('Harnais visuel E2E · MVP-3A');
+  document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Harnais visuel E2E · MVP-3A');
   document
     .querySelector<HTMLElement>('#titre-jeu')
     ?.replaceChildren('Pêcheurs distants synchronisés');
   document
     .querySelector<HTMLElement>('.tagline')
-    ?.replaceChildren('Deux fenêtres partagent la même salle : le second pêcheur apparaît et bouge chez le premier.');
+    ?.replaceChildren(
+      'Deux fenêtres partagent la même salle : le second pêcheur apparaît et bouge chez le premier.',
+    );
 } else if (modePirates) {
   document.querySelector<HTMLElement>('.eyebrow')?.replaceChildren('Galerie de rendu · MVP-2F');
   document.querySelector<HTMLElement>('#titre-jeu')?.replaceChildren('Pirates terrestres');
@@ -1413,7 +1449,7 @@ function construireScene(): JeuClient | undefined {
         vue: modePeche?.lireEtat().vue ?? 'rangee',
         sequence: modePeche?.lireEtat().sequence ?? 0,
         invite: invitePeche.hidden ? null : invitePeche.textContent,
-        statut: statutPeche.hidden ? '' : statutPeche.textContent ?? '',
+        statut: statutPeche.hidden ? '' : (statutPeche.textContent ?? ''),
       },
     });
 
@@ -1501,9 +1537,7 @@ function construireScene(): JeuClient | undefined {
           return {
             salleId: connecteurPanneau?.salleId,
             sessionId: salle?.sessionId,
-            pêcheursDistants: (
-              synchroniseurPecheurs?.obtenirPecheurs() ?? []
-            ).map((pecheur) => {
+            pêcheursDistants: (synchroniseurPecheurs?.obtenirPecheurs() ?? []).map((pecheur) => {
               const etat = pecheur.obtenirEtat().transformation;
               return {
                 sessionId: pecheur.sessionId,
@@ -1540,9 +1574,7 @@ function construireScene(): JeuClient | undefined {
         () => connecteurPanneau?.lireSalle()?.sessionId ?? '',
         scene,
       );
-      emetteurTransformation = creerEmetteurTransformation(
-        () => connecteurPanneau?.lireSalle(),
-      );
+      emetteurTransformation = creerEmetteurTransformation(() => connecteurPanneau?.lireSalle());
       retirerEtiquettesPecheurs = installerEtiquettesPecheurs(
         () =>
           (synchroniseurPecheurs?.obtenirPecheurs() ?? []).map((pecheur) => {
