@@ -171,6 +171,14 @@ const combatResultat = document.querySelector<HTMLElement>('[data-testid="combat
 const combatDeconnexion = document.querySelector<HTMLElement>(
   '[data-testid="combat-deconnexion"]',
 );
+const pecheJoueur = document.querySelector<HTMLElement>('[data-testid="peche-joueur"]');
+const pecheSequence = document.querySelector<HTMLElement>('[data-testid="peche-sequence"]');
+const pecheZone = document.querySelector<HTMLElement>('[data-testid="peche-zone"]');
+const pechePhase = document.querySelector<HTMLElement>('[data-testid="peche-phase"]');
+const pecheLignesActives = document.querySelector<HTMLElement>(
+  '[data-testid="peche-lignes-actives"]',
+);
+const pecheResultat = document.querySelector<HTMLElement>('[data-testid="peche-resultat"]');
 const diagnosticTir = document.querySelector<HTMLElement>('[data-testid="tir-diagnostic"]');
 const panneauAccueil = document.querySelector<HTMLElement>('[data-testid="panneau-accueil"]');
 const formulaireConnexion = document.querySelector<HTMLFormElement>(
@@ -224,6 +232,12 @@ if (
   !combatReapparition ||
   !combatResultat ||
   !combatDeconnexion ||
+  !pecheJoueur ||
+  !pecheSequence ||
+  !pecheZone ||
+  !pechePhase ||
+  !pecheLignesActives ||
+  !pecheResultat ||
   !diagnosticTir ||
   !panneauAccueil ||
   !formulaireConnexion ||
@@ -425,6 +439,12 @@ const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
   reapparition: combatReapparition,
   resultat: combatResultat,
   deconnexion: combatDeconnexion,
+  pecheJoueur,
+  pecheSequence,
+  pecheZone,
+  pechePhase,
+  pecheLignesActives,
+  pecheResultat,
 };
 const indicateurTir = diagnosticTir;
 const panneauAccueilElement = panneauAccueil;
@@ -525,6 +545,25 @@ declare global {
       };
       /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
       lireDeconnexion?: () => number | undefined;
+      /** Prépare le joueur dans la première zone, uniquement pour le harnais E2E. */
+      preparerPecheE2E?: () => void;
+      avancerPecheE2E?: () => void;
+      lancerPeche?: () => void;
+      releverPeche?: () => void;
+      annulerPeche?: () => void;
+      lirePeche?: () => {
+        readonly lignesActives: number;
+        readonly ligneLocale:
+          | {
+              readonly joueurId: string;
+              readonly sequence: number;
+              readonly zoneId: string;
+              readonly phase: string;
+            }
+          | undefined;
+        readonly dernierResultat: unknown;
+      };
+      quitterSalleE2E?: () => void;
     };
   }
 }
@@ -551,6 +590,7 @@ const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modePilotage = paramètres.get('pilotage') === '1';
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
+const modePecheAutoritaireE2E = modeDiagnosticSalle && paramètres.get('peche') === '1';
 const cameraDemandée = paramètres.get('camera');
 const modeCamera: ModeCameraMonde =
   cameraDemandée === 'rivage' ||
@@ -1787,7 +1827,7 @@ if (modeDiagnosticSalle) {
   )
     .then((connexion) => {
       diagnosticSalleConnecte = connexion;
-      if (modeCombatE2E) {
+      if (modeCombatE2E || modePecheAutoritaireE2E) {
         window.__pirateIslandsE2E = {
           verrouillerPointeur: () => undefined,
           libererPointeur: () => undefined,
@@ -1816,6 +1856,13 @@ if (modeDiagnosticSalle) {
           infligerDegatsE2E: connexion.infligerDegatsE2E,
           lireCombat: connexion.lireCombat,
           lireDeconnexion: connexion.lireDeconnexion,
+          preparerPecheE2E: connexion.preparerPecheE2E,
+          avancerPecheE2E: connexion.avancerPecheE2E,
+          lancerPeche: connexion.lancerPeche,
+          releverPeche: connexion.releverPeche,
+          annulerPeche: connexion.annulerPeche,
+          lirePeche: connexion.lirePeche,
+          quitterSalleE2E: connexion.quitterSalleE2E,
         };
       }
     })
