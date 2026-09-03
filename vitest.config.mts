@@ -16,6 +16,8 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
+    maxWorkers: 1,
+    fileParallelism: false,
     passWithNoTests: false,
     reporters: ['default'],
   },
