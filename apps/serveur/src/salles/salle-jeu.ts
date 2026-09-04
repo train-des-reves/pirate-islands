@@ -9,37 +9,66 @@ import {
   creerEtatSalle,
   creerJoueur,
   creerPirate,
+  LignePecheSchema,
   obtenirPointApparition,
+  type MessageAnnulerPeche,
+  type MessageAvancerPecheE2E,
   type EtatSalle,
   type Joueur,
   type MessageDegatsE2E,
   type MessageIntentionTir,
+  type MessageLancerPeche,
+  type MessagePreparerPecheE2E,
   type MessagePing,
+  type MessagePositionE2E,
+  type MessageReleverPeche,
+  type MessageResultatPeche,
   type MessagePong,
   type MessageResultatTir,
   type MessageTransformationJoueur,
   type MetadonneesSalleMatchmaking,
+  validerMessageAnnulerPeche,
+  validerMessageAvancerPecheE2E,
   validerMessageDegatsE2E,
   validerMessageIntentionTir,
+  validerMessageLancerPeche,
+  validerMessagePreparerPecheE2E,
   validerMessagePing,
+  validerMessagePositionE2E,
+  validerMessageReleverPeche,
   validerMessageTransformationJoueur,
   validerOptionsConnexion,
   VITESSE_MAXIMALE_JOUEUR,
 } from '@pirate/protocole';
 import {
+  CADENCE_LANCER_PECHE_MS,
   DELAI_REAPPARITION_JOUEUR_MS,
+  DISTANCE_ORIGINE_PECHE_ADMISE,
   DEGATS_PAR_TIR_PIRATE,
+  MachineEtatPirate,
+  PROFIL_TERRE,
   appliquerDegatsJoueur,
   appliquerDegatsPirate,
+  annulerPeche,
+  avancerPeche,
   choisirReapparition,
+  ETAT_PECHE_INACTIF,
   genererMonde,
+  lancerPeche,
+  pointDansCollisionIle,
+  pointDansZonePeche,
+  PORTEE_PECHE,
   reinitialiserJoueurReapparu,
   reapparitionDue,
+  releverPeche,
   resoudreCibleTiree,
   PAS_SIMULATION_MARITIME_SEC,
   SimulationPiratesMaritimes,
   type CiblePerçue,
+  type DescripteurIle,
   type EtatBateauMaritimeSimulation,
+  type EtatPeche,
+  type SortieIaPirate,
   validerIntentionServeur,
 } from '@pirate/coeur-jeu';
 import { Room, type AuthContext, type Client } from '@colyseus/core';
@@ -50,7 +79,14 @@ interface MessagesSalle {
   [NOMS_MESSAGES.transformationJoueur]: MessageTransformationJoueur;
   [NOMS_MESSAGES.intentionTir]: MessageIntentionTir;
   [NOMS_MESSAGES.resultatTir]: MessageResultatTir;
+  [NOMS_MESSAGES.lancerPeche]: MessageLancerPeche;
+  [NOMS_MESSAGES.releverPeche]: MessageReleverPeche;
+  [NOMS_MESSAGES.annulerPeche]: MessageAnnulerPeche;
+  [NOMS_MESSAGES.resultatPeche]: MessageResultatPeche;
+  [NOMS_MESSAGES.preparerPecheE2E]: MessagePreparerPecheE2E;
+  [NOMS_MESSAGES.avancerPecheE2E]: MessageAvancerPecheE2E;
   [NOMS_MESSAGES.degatsE2E]: MessageDegatsE2E;
+  [NOMS_MESSAGES.positionE2E]: MessagePositionE2E;
 }
 
 /** Données joueur privées conservées côté serveur, jamais dévoilées au client. */
@@ -58,7 +94,35 @@ interface DonneesClientSalle {
   readonly indexApparition: number;
   readonly dernierTirMs: number;
   readonly derniereSequence: number;
+  readonly dernierLancerPecheMs: number;
+  readonly derniereSequencePeche: number;
   readonly prochaineReapparitionMs: number;
+}
+
+export interface HorlogeSimulation {
+  readonly automatique: boolean;
+  lireMs(): number;
+  avancerMs(deltaMs: number): void;
+}
+
+export function creerHorlogeSimulation(initialMs = 0, automatique = true): HorlogeSimulation {
+  let tempsMs = Number.isFinite(initialMs) && initialMs >= 0 ? initialMs : 0;
+  return {
+    automatique,
+    lireMs: () => tempsMs,
+    avancerMs: (deltaMs) => {
+      if (Number.isFinite(deltaMs) && deltaMs >= 0) {
+        tempsMs += deltaMs;
+      }
+    },
+  };
+}
+
+function distance3D(
+  première: { readonly x: number; readonly y: number; readonly z: number },
+  seconde: { readonly x: number; readonly y: number; readonly z: number },
+): number {
+  return Math.hypot(première.x - seconde.x, première.y - seconde.y, première.z - seconde.z);
 }
 
 interface DerniereTransformation {
@@ -76,6 +140,8 @@ type ClientSalle = Client<{
 
 const CODE_MESSAGE_INVALIDE = 4003;
 const CODE_MESSAGE_INCONNU = 4004;
+export const PAS_SIMULATION_PIRATES_MS = 50;
+const PAS_SIMULATION_PIRATES_SEC = PAS_SIMULATION_PIRATES_MS / 1000;
 
 function vitesseManifestementImpossible(
   précédente: DerniereTransformation,
@@ -99,6 +165,16 @@ function vitesseManifestementImpossible(
   return vitesse > VITESSE_MAXIMALE_JOUEUR;
 }
 
+function joueurDansIle(ile: DescripteurIle, joueur: Joueur): boolean {
+  // La transformation d’un joueur est portée à hauteur du sol pour tester la
+  // surface horizontale, même pendant les anciennes apparitions à y = 0.
+  return pointDansCollisionIle(ile, {
+    x: joueur.transformation.x,
+    y: ile.collision.hauteurSurface,
+    z: joueur.transformation.z,
+  });
+}
+
 let modeE2EServeurActif = false;
 
 /** Active le mannequin E2E depuis le démarrage serveur, hors de portée du client. */
@@ -115,11 +191,20 @@ export class SalleJeu extends Room<{
 
   private prochainIndexApparition = 0;
   private readonly dernièresTransformations = new Map<string, DerniereTransformation>();
+  private readonly machinesPirates = new Map<string, MachineEtatPirate>();
+  private readonly ilesPirates = new Map<string, DescripteurIle>();
+  private readonly etatsPeche = new Map<string, EtatPeche>();
   private monde: ReturnType<typeof genererMonde> = genererMonde();
   private modeE2E = false;
   private simulationMaritime: SimulationPiratesMaritimes | undefined;
   private accumulationMaritimeMs = 0;
   private readonly echeancesSuppressionBateaux = new Map<string, number>();
+  private horloge: HorlogeSimulation = creerHorlogeSimulation();
+
+  /** Injecte une horloge contrôlée avant l-initialisation de la salle. */
+  configurerHorloge(horloge: HorlogeSimulation): void {
+    this.horloge = horloge;
+  },
 
   override onCreate(options: unknown): void {
     const validation = validerOptionsConnexion(options);
@@ -149,7 +234,14 @@ export class SalleJeu extends Room<{
       nombreBateaux: 1,
     });
     this.initialiserBateauxPirates();
-    this.setSimulationInterval((deltaMs) => this.actualiserSimulationMaritime(deltaMs), 50);
+    this.setSimulationInterval((deltaMs) => {
+      if (this.horloge.automatique && !this.modeE2E) {
+        this.horloge.avancerMs(deltaMs);
+      }
+      this.actualiserPeches();
+      this.actualiserSimulationMaritime(deltaMs);
+      this.actualiserSimulationPirates();
+    }, PAS_SIMULATION_PIRATES_MS);
 
     this.onMessage('*', (client, type, message) => {
       this.traiterMessage(client, type, message);
@@ -182,6 +274,8 @@ export class SalleJeu extends Room<{
       indexApparition,
       dernierTirMs: 0,
       derniereSequence: 0,
+      dernierLancerPecheMs: -Infinity,
+      derniereSequencePeche: 0,
       prochaineReapparitionMs: 0,
     };
 
@@ -207,6 +301,7 @@ export class SalleJeu extends Room<{
     this.state.joueurs.delete(client.sessionId);
     this.state.bateaux.delete('bateau-' + client.sessionId);
     this.dernièresTransformations.delete(client.sessionId);
+    this.nettoyerLignePeche(client.sessionId);
 
     if (this.state.joueurs.size === 0) {
       this.state.phase = PHASE_SALLE_ATTENTE;
@@ -224,6 +319,36 @@ export class SalleJeu extends Room<{
         pirate.transformation.lacet = 0;
         pirate.statut = 'patrouille';
         this.state.pirates.set(pirate.identifiant, pirate);
+        this.ilesPirates.set(pirate.identifiant, ile);
+        this.machinesPirates.set(
+          pirate.identifiant,
+          new MachineEtatPirate({
+            graine: this.monde.graine + ':' + pirate.identifiant,
+            profil: {
+              ...PROFIL_TERRE,
+              pointAncrage: {
+                x: ile.transformation.position.x,
+                z: ile.transformation.position.z,
+              },
+            },
+            positionDepart: {
+              x: apparition.position.x,
+              z: apparition.position.z,
+            },
+            limites: {
+              largeur: ile.rayonX * 2,
+              profondeur: ile.rayonZ * 2,
+              rayonTerrestreMax: Math.min(ile.rayonX, ile.rayonZ) * 0.78,
+              centre: {
+                x: ile.collision.centre.x,
+                z: ile.collision.centre.z,
+              },
+              rayonX: ile.rayonX * 0.78,
+              rayonZ: ile.rayonZ * 0.78,
+              rotationY: ile.collision.rotationY,
+            },
+          }),
+        );
       }
     }
   }
@@ -384,6 +509,136 @@ export class SalleJeu extends Room<{
     }
   }
 
+  /** Avance toutes les machines d’IA sur un pas fixe et applique leurs sorties. */
+  private actualiserSimulationPirates(): void {
+    for (const pirate of this.state.pirates.values()) {
+      const machine = this.machinesPirates.get(pirate.identifiant);
+      const ile = this.ilesPirates.get(pirate.identifiant);
+      if (!machine || !ile) {
+        continue;
+      }
+
+      if (!pirate.vivant) {
+        machine.tuer();
+      }
+
+      const cible = pirate.vivant
+        ? this.trouverCiblePirate(ile, machine.lirePosition())
+        : undefined;
+      const sortie = machine.actualiser(PAS_SIMULATION_PIRATES_SEC, cible);
+      this.appliquerSortiePirate(pirate.identifiant, sortie);
+
+      if (sortie.intentionAttaque) {
+        this.appliquerAttaquePirate(pirate.identifiant, sortie);
+      }
+    }
+  }
+
+  private trouverCiblePirate(
+    ile: DescripteurIle,
+    positionPirate: { readonly x: number; readonly z: number },
+  ): CiblePerçue | undefined {
+    let meilleure: CiblePerçue | undefined;
+    let meilleureDistance = Number.POSITIVE_INFINITY;
+
+    for (const joueur of this.state.joueurs.values()) {
+      if (!joueur.vivant || !joueurDansIle(ile, joueur)) {
+        continue;
+      }
+
+      const distance = Math.hypot(
+        joueur.transformation.x - positionPirate.x,
+        joueur.transformation.z - positionPirate.z,
+      );
+      if (distance < meilleureDistance) {
+        meilleureDistance = distance;
+        meilleure = {
+          id: joueur.sessionId,
+          position: {
+            x: joueur.transformation.x,
+            z: joueur.transformation.z,
+          },
+        };
+      }
+    }
+
+    return meilleure;
+  }
+
+  private appliquerSortiePirate(identifiant: string, sortie: SortieIaPirate): void {
+    const pirate = this.state.pirates.get(identifiant);
+    if (!pirate) {
+      return;
+    }
+
+    pirate.transformation.x = sortie.position.x;
+    pirate.transformation.z = sortie.position.z;
+    pirate.transformation.lacet = sortie.cap;
+    pirate.statut = sortie.etat;
+    pirate.vivant = sortie.etat !== 'mort';
+  }
+
+  private appliquerAttaquePirate(identifiant: string, sortie: SortieIaPirate): void {
+    const intention = sortie.intentionAttaque;
+    if (!intention) {
+      return;
+    }
+
+    const pirate = this.state.pirates.get(identifiant);
+    const joueur = this.state.joueurs.get(intention.cible);
+    if (
+      !pirate ||
+      !joueur ||
+      !joueur.vivant ||
+      !this.ileDuPirateContientJoueur(identifiant, joueur)
+    ) {
+      return;
+    }
+
+    const distance = Math.hypot(
+      joueur.transformation.x - pirate.transformation.x,
+      joueur.transformation.z - pirate.transformation.z,
+    );
+    if (distance > intention.portee) {
+      return;
+    }
+
+    const après = appliquerDegatsJoueur(
+      {
+        sessionId: joueur.sessionId,
+        sante: joueur.sante,
+        vivant: joueur.vivant,
+      },
+      DEGATS_PAR_TIR_PIRATE,
+    );
+    joueur.sante = après.sante;
+    joueur.vivant = après.vivant;
+    joueur.statut = après.vivant ? 'actif' : 'mort';
+
+    if (!après.vivant) {
+      const client = this.clients.find((entrée) => entrée.sessionId === joueur.sessionId);
+      if (client) {
+        const données: DonneesClientSalle = client.userData ?? {
+          indexApparition: 0,
+          dernierTirMs: 0,
+          derniereSequence: 0,
+          dernierLancerPecheMs: -Infinity,
+          derniereSequencePeche: 0,
+          prochaineReapparitionMs: 0,
+        };
+        client.userData = {
+          ...données,
+          prochaineReapparitionMs: Date.now() + DELAI_REAPPARITION_JOUEUR_MS,
+        };
+      }
+    }
+  }
+
+  private ileDuPirateContientJoueur(identifiant: string, joueur: Joueur): boolean {
+    const ile = this.ilesPirates.get(identifiant);
+    return ile ? joueurDansIle(ile, joueur) : false;
+  }
+
   private traiterMessage(client: ClientSalle, type: string | number, message: unknown): void {
     if (type === NOMS_MESSAGES.ping) {
       this.traiterPing(client, message);
@@ -400,8 +655,38 @@ export class SalleJeu extends Room<{
       return;
     }
 
+    if (type === NOMS_MESSAGES.lancerPeche) {
+      this.traiterLancerPeche(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.releverPeche) {
+      this.traiterReleverPeche(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.annulerPeche) {
+      this.traiterAnnulerPeche(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.preparerPecheE2E) {
+      this.traiterPreparerPecheE2E(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.avancerPecheE2E) {
+      this.traiterAvancerPecheE2E(client, message);
+      return;
+    }
+
     if (type === NOMS_MESSAGES.degatsE2E) {
       this.traiterDegatsE2E(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.positionE2E) {
+      this.traiterPositionE2E(client, message);
       return;
     }
 
@@ -479,6 +764,8 @@ export class SalleJeu extends Room<{
       indexApparition: 0,
       dernierTirMs: 0,
       derniereSequence: 0,
+      dernierLancerPecheMs: -Infinity,
+      derniereSequencePeche: 0,
       prochaineReapparitionMs: 0,
     };
 
@@ -548,6 +835,8 @@ export class SalleJeu extends Room<{
       indexApparition: données.indexApparition,
       dernierTirMs: maintenant,
       derniereSequence: intentionAcceptee.sequence,
+      dernierLancerPecheMs: données.dernierLancerPecheMs,
+      derniereSequencePeche: données.derniereSequencePeche,
       prochaineReapparitionMs: données.prochaineReapparitionMs,
     };
 
@@ -666,15 +955,363 @@ export class SalleJeu extends Room<{
         indexApparition: 0,
         dernierTirMs: 0,
         derniereSequence: 0,
+        dernierLancerPecheMs: -Infinity,
+        derniereSequencePeche: 0,
         prochaineReapparitionMs: 0,
       };
       client.userData = {
         indexApparition: donneesActuelles.indexApparition,
         dernierTirMs: donneesActuelles.dernierTirMs,
         derniereSequence: donneesActuelles.derniereSequence,
+        dernierLancerPecheMs: donneesActuelles.dernierLancerPecheMs,
+        derniereSequencePeche: donneesActuelles.derniereSequencePeche,
         prochaineReapparitionMs: maintenant + DELAI_REAPPARITION_JOUEUR_MS,
       };
+      this.annulerLignePeche(client.sessionId);
     }
+  }
+
+  /** Positionne le mannequin sur une île pour les scénarios E2E déterministes. */
+  private traiterPositionE2E(client: ClientSalle, message: unknown): void {
+    if (!this.modeE2E) {
+      this.rejeterMessage(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Le message E2E de position n’est pas autorisé.',
+      );
+      return;
+    }
+
+    const validation = validerMessagePositionE2E(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+
+    const joueur = this.state.joueurs.get(client.sessionId);
+    if (!joueur) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le joueur est inconnu.');
+      return;
+    }
+
+    const position = validation.valeur.position;
+    const surUneIle = this.monde.iles.some((ile) =>
+      pointDansCollisionIle(ile, {
+        x: position.x,
+        y: ile.collision.hauteurSurface,
+        z: position.z,
+      }),
+    );
+    if (!surUneIle) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'La position E2E doit être sur une île.');
+      return;
+    }
+
+    joueur.transformation.x = position.x;
+    joueur.transformation.y = position.y;
+    joueur.transformation.z = position.z;
+    this.dernièresTransformations.set(client.sessionId, {
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      horodatage: Date.now(),
+    });
+  }
+
+  private traiterLancerPeche(client: ClientSalle, message: unknown): void {
+    const validation = validerMessageLancerPeche(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+
+    const joueur = this.state.joueurs.get(client.sessionId);
+    if (!joueur) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le joueur est inconnu.');
+      return;
+    }
+    if (!joueur.vivant) {
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Un joueur mort ne peut pas pêcher.');
+      return;
+    }
+
+    const données = client.userData ?? {
+      indexApparition: 0,
+      dernierTirMs: 0,
+      derniereSequence: 0,
+      dernierLancerPecheMs: -Infinity,
+      derniereSequencePeche: 0,
+      prochaineReapparitionMs: 0,
+    };
+    const commande = validation.valeur;
+    const maintenant = this.horloge.lireMs();
+    if (this.etatsPeche.has(client.sessionId)) {
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Une ligne de pêche est déjà active.');
+      return;
+    }
+    if (commande.sequence <= données.derniereSequencePeche) {
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'La séquence de pêche a déjà été consommée.',
+      );
+      return;
+    }
+    if (maintenant - données.dernierLancerPecheMs < CADENCE_LANCER_PECHE_MS) {
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'La cadence de pêche n’est pas respectée.',
+      );
+      return;
+    }
+
+    const zone = this.monde.zonesPeche.find((candidate) => candidate.id === commande.zoneId);
+    if (!zone) {
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'La zone de pêche est inconnue.');
+      return;
+    }
+    const positionJoueur = {
+      x: joueur.transformation.x,
+      y: joueur.transformation.y,
+      z: joueur.transformation.z,
+    };
+    const origine = { x: commande.origineX, y: commande.origineY, z: commande.origineZ };
+    const flotteur = { x: commande.flotteurX, y: commande.flotteurY, z: commande.flotteurZ };
+    if (!pointDansZonePeche(zone, positionJoueur)) {
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Le joueur est hors de la zone de pêche.');
+      return;
+    }
+    if (
+      distance3D(origine, {
+        x: joueur.transformation.x,
+        y: joueur.transformation.y + 1.62,
+        z: joueur.transformation.z,
+      }) > DISTANCE_ORIGINE_PECHE_ADMISE
+    ) {
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'L’origine de pêche est trop éloignée du joueur.',
+      );
+      return;
+    }
+    if (distance3D(origine, flotteur) > PORTEE_PECHE) {
+      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Le flotteur est hors de portée.');
+      return;
+    }
+    if (!pointDansZonePeche(zone, flotteur)) {
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Le flotteur est hors de la zone de pêche.',
+      );
+      return;
+    }
+
+    const état = lancerPeche(
+      ETAT_PECHE_INACTIF,
+      this.monde,
+      zone.id,
+      this.state.metadonnees.graine,
+      commande.sequence,
+      maintenant,
+    );
+    this.etatsPeche.set(client.sessionId, état);
+    this.synchroniserLignePeche(client.sessionId, état, flotteur);
+    client.userData = {
+      indexApparition: données.indexApparition,
+      dernierTirMs: données.dernierTirMs,
+      derniereSequence: données.derniereSequence,
+      dernierLancerPecheMs: maintenant,
+      derniereSequencePeche: commande.sequence,
+      prochaineReapparitionMs: données.prochaineReapparitionMs,
+    };
+  }
+
+  private traiterReleverPeche(client: ClientSalle, message: unknown): void {
+    const validation = validerMessageReleverPeche(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+    const état = this.etatsPeche.get(client.sessionId);
+    if (!état || état.sequence !== validation.valeur.sequence) {
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Aucune ligne active ne correspond à cette séquence.',
+      );
+      return;
+    }
+    const résultat = releverPeche(état, this.horloge.lireMs());
+    this.etatsPeche.set(client.sessionId, résultat);
+    if (résultat.resultat) {
+      this.publierResultatPeche(client.sessionId, résultat);
+    } else {
+      this.synchroniserLignePeche(client.sessionId, résultat);
+    }
+  }
+
+  private traiterAnnulerPeche(client: ClientSalle, message: unknown): void {
+    const validation = validerMessageAnnulerPeche(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+    const état = this.etatsPeche.get(client.sessionId);
+    if (!état || état.sequence !== validation.valeur.sequence) {
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Aucune ligne active ne correspond à cette séquence.',
+      );
+      return;
+    }
+    const résultat = annulerPeche(état, this.horloge.lireMs());
+    this.etatsPeche.set(client.sessionId, résultat);
+    this.publierResultatPeche(client.sessionId, résultat);
+  }
+
+  private traiterPreparerPecheE2E(client: ClientSalle, message: unknown): void {
+    if (!this.modeE2E) {
+      this.rejeterMessage(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'La préparation E2E de pêche n’est pas autorisée.',
+      );
+      return;
+    }
+    const validation = validerMessagePreparerPecheE2E(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+    const joueur = this.state.joueurs.get(client.sessionId);
+    const zone = this.monde.zonesPeche[0];
+    if (!joueur || !zone) {
+      this.rejeterMessage(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'La préparation E2E de pêche est impossible.',
+      );
+      return;
+    }
+    this.annulerLignePeche(client.sessionId);
+    joueur.transformation.x = zone.centre.x;
+    joueur.transformation.y = zone.centre.y;
+    joueur.transformation.z = zone.centre.z;
+    this.state.joueurs.set(client.sessionId, joueur);
+    this.dernièresTransformations.set(client.sessionId, {
+      x: zone.centre.x,
+      y: zone.centre.y,
+      z: zone.centre.z,
+      horodatage: Date.now(),
+    });
+  }
+
+  private traiterAvancerPecheE2E(client: ClientSalle, message: unknown): void {
+    if (!this.modeE2E) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le message est réservé au mode E2E.');
+      return;
+    }
+    const validation = validerMessageAvancerPecheE2E(message);
+    if (!validation.valide) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, validation.erreurs.join(' '));
+      return;
+    }
+    this.horloge.avancerMs(validation.valeur.deltaMs);
+    this.actualiserPeches();
+  }
+
+  private actualiserPeches(): void {
+    const maintenant = this.horloge.lireMs();
+    for (const [sessionId, état] of this.etatsPeche) {
+      const joueur = this.state.joueurs.get(sessionId);
+      const zone = état.zoneId
+        ? this.monde.zonesPeche.find((candidate) => candidate.id === état.zoneId)
+        : undefined;
+      if (
+        !joueur ||
+        !joueur.vivant ||
+        !zone ||
+        !pointDansZonePeche(zone, {
+          x: joueur.transformation.x,
+          y: joueur.transformation.y,
+          z: joueur.transformation.z,
+        })
+      ) {
+        const annulé = annulerPeche(état, maintenant);
+        this.etatsPeche.set(sessionId, annulé);
+        this.publierResultatPeche(sessionId, annulé);
+        continue;
+      }
+      const avancé = avancerPeche(état, maintenant);
+      this.etatsPeche.set(sessionId, avancé);
+      if (avancé.resultat) {
+        this.publierResultatPeche(sessionId, avancé);
+      } else if (avancé.phase !== état.phase || avancé.tempsCourantMs !== état.tempsCourantMs) {
+        this.synchroniserLignePeche(sessionId, avancé);
+      }
+    }
+  }
+
+  private synchroniserLignePeche(
+    sessionId: string,
+    état: EtatPeche,
+    flotteur?: { readonly x: number; readonly y: number; readonly z: number },
+  ): void {
+    const ligne = this.state.lignesPeche.get(sessionId) ?? new LignePecheSchema();
+    ligne.joueurId = sessionId;
+    ligne.sequence = état.sequence;
+    ligne.phase = état.phase;
+    ligne.zoneId = état.zoneId ?? '';
+    ligne.flotteurX = flotteur?.x ?? ligne.flotteurX;
+    ligne.flotteurY = flotteur?.y ?? ligne.flotteurY;
+    ligne.flotteurZ = flotteur?.z ?? ligne.flotteurZ;
+    ligne.lanceAuMs = état.lanceAuMs;
+    ligne.morsureAuMs = état.lanceAuMs + (état.delaiMorsureMs ?? 0);
+    ligne.finMorsureMs = ligne.morsureAuMs + (état.fenetreMorsureMs ?? 0);
+    this.state.lignesPeche.set(sessionId, ligne);
+  }
+
+  private publierResultatPeche(sessionId: string, état: EtatPeche): void {
+    const resultat = état.resultat;
+    const zoneId = état.zoneId;
+    if (!resultat || !zoneId) {
+      this.nettoyerLignePeche(sessionId);
+      return;
+    }
+    const message: MessageResultatPeche = {
+      joueurId: sessionId,
+      sequence: état.sequence,
+      zoneId,
+      resultat,
+      horodatageServeur: this.horloge.lireMs(),
+      ...(resultat === 'prise' && état.espece !== undefined ? { espece: état.espece } : {}),
+      ...(resultat === 'prise' && état.taille !== undefined ? { taille: état.taille } : {}),
+    };
+    this.broadcast(NOMS_MESSAGES.resultatPeche, message);
+    this.nettoyerLignePeche(sessionId);
+  }
+
+  private annulerLignePeche(sessionId: string): void {
+    const état = this.etatsPeche.get(sessionId);
+    if (!état) {
+      return;
+    }
+    const annulé = annulerPeche(état, this.horloge.lireMs());
+    this.publierResultatPeche(sessionId, annulé);
+  }
+
+  private nettoyerLignePeche(sessionId: string): void {
+    this.etatsPeche.delete(sessionId);
+    this.state.lignesPeche.delete(sessionId);
+  }
+
+  override onDispose(): void {
+    this.etatsPeche.clear();
+    this.state.lignesPeche.clear();
   }
 
   /**
@@ -722,6 +1359,10 @@ export class SalleJeu extends Room<{
       z: pointApparition.z,
       horodatage: Date.now(),
     });
+  }
+
+  private refuserActionPeche(client: ClientSalle, code: number, raison: string): void {
+    client.error(code, raison);
   }
 
   private rejeterMessage(client: ClientSalle, code: number, raison: string): void {
