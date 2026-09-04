@@ -81,7 +81,7 @@ async function avancerTemps(page: Page, deltaMs: number): Promise<void> {
   }, deltaMs);
 }
 
-test('deux joueurs observent le même bateau : le pilote pilote, l'observateur voit le mouvement', async ({
+test('deux joueurs observent le même bateau : le pilote pilote, l\'observateur voit le mouvement', async ({
   page,
 }) => {
   test.setTimeout(90_000);
