@@ -5,6 +5,7 @@ import {
   PHASE_SALLE_ATTENTE,
   PHASE_SALLE_PARTIE,
   creerBateau,
+  creerBateauPirate,
   creerEtatSalle,
   creerJoueur,
   creerPirate,
@@ -61,8 +62,11 @@ import {
   reapparitionDue,
   releverPeche,
   resoudreCibleTiree,
+  PAS_SIMULATION_MARITIME_SEC,
+  SimulationPiratesMaritimes,
   type CiblePerçue,
   type DescripteurIle,
+  type EtatBateauMaritimeSimulation,
   type EtatPeche,
   type SortieIaPirate,
   validerIntentionServeur,
@@ -192,9 +196,12 @@ export class SalleJeu extends Room<{
   private readonly etatsPeche = new Map<string, EtatPeche>();
   private monde: ReturnType<typeof genererMonde> = genererMonde();
   private modeE2E = false;
+  private simulationMaritime: SimulationPiratesMaritimes | undefined;
+  private accumulationMaritimeMs = 0;
+  private readonly echeancesSuppressionBateaux = new Map<string, number>();
   private horloge: HorlogeSimulation = creerHorlogeSimulation();
 
-  /** Injecte une horloge contrôlée avant l'initialisation de la salle. */
+  /** Injecte une horloge contrôlée avant l-initialisation de la salle. */
   configurerHorloge(horloge: HorlogeSimulation): void {
     this.horloge = horloge;
   }
@@ -221,11 +228,18 @@ export class SalleJeu extends Room<{
 
     this.monde = genererMonde(this.state.metadonnees.graine);
     this.peuplerPirates();
+    this.simulationMaritime = new SimulationPiratesMaritimes({
+      monde: this.monde,
+      graine: this.state.metadonnees.graine,
+      nombreBateaux: 1,
+    });
+    this.initialiserBateauxPirates();
     this.setSimulationInterval((deltaMs) => {
       if (this.horloge.automatique && !this.modeE2E) {
         this.horloge.avancerMs(deltaMs);
       }
       this.actualiserPeches();
+      this.actualiserSimulationMaritime(deltaMs);
       this.actualiserSimulationPirates();
     }, PAS_SIMULATION_PIRATES_MS);
 
@@ -336,6 +350,166 @@ export class SalleJeu extends Room<{
           }),
         );
       }
+    }
+  }
+
+  /** Crée un équipage visible par bateau à partir des routes déterministes. */
+  private initialiserBateauxPirates(): void {
+    const simulation = this.simulationMaritime;
+    if (!simulation) {
+      return;
+    }
+
+    const initial = simulation.lireEtatInitial();
+    for (const bateau of initial.bateaux) {
+      const état = creerBateauPirate(bateau.id, bateau.position, bateau.routeId);
+      état.transformation.lacet = bateau.cap;
+      état.statut = 'patrouille';
+      this.state.bateauxPirates.set(état.identifiant, état);
+      for (let index = 0; index < 2; index += 1) {
+        const pirate = creerPirate(`${bateau.id}-equipage-${index + 1}`);
+        pirate.bateauId = bateau.id;
+        pirate.transformation.x = bateau.position.x + (index === 0 ? 0.7 : -0.7);
+        pirate.transformation.y = 1.15;
+        pirate.transformation.z = bateau.position.z + 0.8;
+        pirate.transformation.lacet = bateau.cap;
+        pirate.statut = 'patrouille';
+        this.state.pirates.set(pirate.identifiant, pirate);
+      }
+    }
+  }
+
+  /** Avance l'IA et applique ses attaques sans jamais déléguer la décision au client. */
+  private actualiserSimulationMaritime(deltaMs: number): void {
+    const simulation = this.simulationMaritime;
+    if (!simulation) {
+      return;
+    }
+
+    const deltaSain = Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+    this.accumulationMaritimeMs = Math.min(1_000, this.accumulationMaritimeMs + deltaSain);
+    while (this.accumulationMaritimeMs >= PAS_SIMULATION_MARITIME_SEC * 1_000) {
+      this.accumulationMaritimeMs -= PAS_SIMULATION_MARITIME_SEC * 1_000;
+      this.appliquerPasMaritime(simulation);
+    }
+  }
+
+  private appliquerPasMaritime(simulation: SimulationPiratesMaritimes): void {
+    const cibles: CiblePerçue[] = [];
+    for (const joueur of this.state.joueurs.values()) {
+      if (joueur.vivant) {
+        cibles.push({
+          id: joueur.sessionId,
+          position: { x: joueur.transformation.x, z: joueur.transformation.z },
+        });
+      }
+    }
+
+    const sortie = simulation.actualiser(PAS_SIMULATION_MARITIME_SEC, cibles);
+    const maintenant = Date.now();
+    for (const bateau of sortie.bateaux) {
+      this.appliquerEtatBateauPirate(bateau);
+    }
+
+    for (const attaque of sortie.attaques) {
+      const joueur = this.state.joueurs.get(attaque.cible);
+      if (!joueur || !joueur.vivant) {
+        continue;
+      }
+      const après = appliquerDegatsJoueur(
+        { sessionId: joueur.sessionId, sante: joueur.sante, vivant: joueur.vivant },
+        attaque.degats,
+      );
+      joueur.sante = après.sante;
+      joueur.vivant = après.vivant;
+      joueur.statut = après.vivant ? 'actif' : 'mort';
+      if (!après.vivant) {
+        const client = this.clients.find((candidat) => candidat.sessionId === joueur.sessionId);
+        if (client) {
+          const données = client.userData ?? {
+            indexApparition: 0,
+            dernierTirMs: 0,
+            dernierLancerPecheMs: -Infinity,
+            derniereSequencePeche: 0,
+            derniereSequence: 0,
+            prochaineReapparitionMs: 0,
+          };
+          client.userData = {
+            ...données,
+            prochaineReapparitionMs: maintenant + DELAI_REAPPARITION_JOUEUR_MS,
+          };
+        }
+      }
+    }
+
+    for (const client of this.clients) {
+      const joueur = this.state.joueurs.get(client.sessionId);
+      if (joueur) {
+        this.appliquerReapparitionSiDue(
+          client,
+          joueur,
+          maintenant,
+          client.userData ?? {
+            indexApparition: 0,
+            dernierTirMs: 0,
+            dernierLancerPecheMs: -Infinity,
+            derniereSequencePeche: 0,
+            derniereSequence: 0,
+            prochaineReapparitionMs: 0,
+          },
+        );
+      }
+    }
+
+    for (const [bateauId, echeance] of this.echeancesSuppressionBateaux) {
+      if (maintenant < echeance) {
+        continue;
+      }
+      this.echeancesSuppressionBateaux.delete(bateauId);
+      this.state.bateauxPirates.delete(bateauId);
+      for (const [pirateId, pirate] of this.state.pirates) {
+        if (pirate.bateauId === bateauId) {
+          this.state.pirates.delete(pirateId);
+        }
+      }
+    }
+  }
+
+  private appliquerEtatBateauPirate(état: EtatBateauMaritimeSimulation): void {
+    const bateau = this.state.bateauxPirates.get(état.id);
+    if (!bateau) {
+      return;
+    }
+
+    const détruit = état.etat === 'mort';
+    bateau.transformation.x = état.position.x;
+    bateau.transformation.y = état.position.y;
+    bateau.transformation.z = état.position.z;
+    bateau.transformation.lacet = état.cap;
+    bateau.vitesse = détruit ? 0 : état.vitesse;
+    bateau.statut = détruit ? 'detruit' : état.etat;
+    bateau.actif = !détruit;
+
+    for (const pirate of this.state.pirates.values()) {
+      if (pirate.bateauId !== état.id) {
+        continue;
+      }
+      if (détruit) {
+        pirate.vivant = false;
+        pirate.sante = 0;
+        pirate.statut = 'mort';
+        continue;
+      }
+      const offsetX = pirate.identifiant.endsWith('1') ? 0.7 : -0.7;
+      pirate.transformation.x = état.position.x + offsetX;
+      pirate.transformation.y = 1.15;
+      pirate.transformation.z = état.position.z + 0.8;
+      pirate.transformation.lacet = état.cap;
+      pirate.statut = état.etat;
+    }
+
+    if (détruit && !this.echeancesSuppressionBateaux.has(état.id)) {
+      this.echeancesSuppressionBateaux.set(état.id, Date.now() + 2_000);
     }
   }
 
@@ -709,6 +883,24 @@ export class SalleJeu extends Room<{
         pirate.sante = pirateApresDegats.sante;
         pirate.vivant = pirateApresDegats.vivant;
         pirate.statut = pirateApresDegats.vivant ? 'attaque' : 'mort';
+        if (!pirateApresDegats.vivant && pirate.bateauId) {
+          const bateau = this.state.bateauxPirates.get(pirate.bateauId);
+          if (bateau) {
+            bateau.sante = 0;
+            bateau.actif = false;
+            bateau.vitesse = 0;
+            bateau.statut = 'detruit';
+            this.simulationMaritime?.detruire(bateau.identifiant);
+            for (const membre of this.state.pirates.values()) {
+              if (membre.bateauId === bateau.identifiant) {
+                membre.sante = 0;
+                membre.vivant = false;
+                membre.statut = 'mort';
+              }
+            }
+            this.echeancesSuppressionBateaux.set(bateau.identifiant, Date.now() + 2_000);
+          }
+        }
         pirateNeutralise = !pirateApresDegats.vivant;
       }
     }

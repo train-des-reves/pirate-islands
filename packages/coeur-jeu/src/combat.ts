@@ -6,6 +6,8 @@ export const SANTE_PIRATE_MAXIMALE = 100;
 export const SANTE_JOUEUR_MAXIMALE = 100;
 /** Dégâts infligés par tir à un pirate. */
 export const DEGATS_PAR_TIR_PIRATE = 25;
+/** Nombre minimum de tirs requis pour neutraliser un pirate au premier tir. */
+export const COUPS_NECESSAIRES_PIRATE = Math.ceil(SANTE_PIRATE_MAXIMALE / DEGATS_PAR_TIR_PIRATE);
 /** Cadence minimale entre deux tirs acceptés, en millisecondes, côté serveur. */
 export const CADENCE_TIR_SERVEUR_MS = 150;
 /** Portée maximale d'un tir exprimée en unités monde. */

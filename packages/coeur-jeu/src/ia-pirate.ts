@@ -77,6 +77,8 @@ export interface ProfilIaPirate {
   readonly rayonHysteresis: number;
   readonly rayonPatrouille: number;
   readonly pointAncrage: Coordonnees;
+  /** Points suivis dans l'ordre pendant la patrouille maritime. */
+  readonly routePatrouille?: readonly Coordonnees[];
 }
 
 /** Limites terre/mer imposées aux déplacements. */
@@ -121,6 +123,7 @@ export class MachineEtatPirate {
   private temporisateurRetour = 0;
   private temporisateurAttaque = 0;
   private prochaineCiblePatrouille: Coordonnees;
+  private indexRoutePatrouille = 0;
   private ciblePerdue = false;
   private progressionTemporisation = 0;
   private sequence = 1;
@@ -141,6 +144,8 @@ export class MachineEtatPirate {
       this.profil.pointAncrage,
       this.profil.rayonPatrouille,
       this.limites,
+      this.profil.routePatrouille,
+      this.indexRoutePatrouille,
     );
   }
 
@@ -164,6 +169,11 @@ export class MachineEtatPirate {
     return this.cible ? { ...this.cible } : undefined;
   }
 
+  /** Prochain point de patrouille, exposé pour les diagnostics et les tests. */
+  public lireCiblePatrouille(): Coordonnees {
+    return { ...this.prochaineCiblePatrouille };
+  }
+
   /** Progression du temporisateur courant sur [0, 1], nul hors temporisation. */
   public lireProgression(): number {
     return this.progressionTemporisation;
@@ -179,11 +189,14 @@ export class MachineEtatPirate {
     this.temporisateurPerte = 0;
     this.temporisateurRetour = 0;
     this.temporisateurAttaque = 0;
+    this.indexRoutePatrouille = 0;
     this.prochaineCiblePatrouille = choisirCiblePatrouille(
       this.aleatoire,
       this.profil.pointAncrage,
       this.profil.rayonPatrouille,
       this.limites,
+      this.profil.routePatrouille,
+      this.indexRoutePatrouille,
     );
     this.ciblePerdue = false;
     this.progressionTemporisation = 0;
@@ -261,11 +274,17 @@ export class MachineEtatPirate {
     );
 
     if (atteint) {
+      if (this.profil.routePatrouille && this.profil.routePatrouille.length > 0) {
+        this.indexRoutePatrouille =
+          (this.indexRoutePatrouille + 1) % this.profil.routePatrouille.length;
+      }
       this.prochaineCiblePatrouille = choisirCiblePatrouille(
         this.aleatoire,
         this.profil.pointAncrage,
         this.profil.rayonPatrouille,
         this.limites,
+        this.profil.routePatrouille,
+        this.indexRoutePatrouille,
       );
       this.capCible = angleVers(this.position, this.prochaineCiblePatrouille);
     }
@@ -328,10 +347,13 @@ export class MachineEtatPirate {
       return;
     }
 
+    let cibleValide = false;
     if (cibleSaineContinue(cible, cibleCourante, this.profil)) {
       this.cible = cible;
       this.temporisateurPerte = this.profil.delaiPerteCible;
+      cibleValide = true;
     } else {
+      this.attaqueEnAttente = false;
       this.temporisateurPerte = Math.max(0, this.temporisateurPerte - delta);
       if (this.temporisateurPerte <= 0) {
         this.etat = 'retour';
@@ -342,7 +364,19 @@ export class MachineEtatPirate {
       }
     }
 
-    const distanceCourante = distance(this.position, cibleCourante.position);
+    if (!cibleValide) {
+      return;
+    }
+
+    const cibleActuelle = this.cible;
+    if (!cibleActuelle) {
+      this.etat = 'retour';
+      this.capCible = angleVers(this.position, this.profil.pointAncrage);
+      this.temporisateurRetour = this.profil.delaiRetour;
+      return;
+    }
+
+    const distanceCourante = distance(this.position, cibleActuelle.position);
     if (distanceCourante > this.profil.porteePoursuite + this.profil.rayonHysteresis) {
       this.etat = 'retour';
       this.capCible = angleVers(this.position, this.profil.pointAncrage);
@@ -351,7 +385,14 @@ export class MachineEtatPirate {
       return;
     }
 
-    this.capCible = angleVers(this.position, cibleCourante.position);
+    if (distanceCourante > this.profil.porteeAttaque) {
+      this.etat = 'poursuite';
+      this.attaqueEnAttente = false;
+      this.avancerVersCible(delta, cibleActuelle.position, this.profil.vitessePoursuite);
+      return;
+    }
+
+    this.capCible = angleVers(this.position, cibleActuelle.position);
     this.tournerVersCible(delta);
     this.temporisateurAttaque = Math.max(0, this.temporisateurAttaque - delta);
     if (this.temporisateurAttaque <= 0) {
@@ -375,11 +416,14 @@ export class MachineEtatPirate {
     const distanceAncrage = distance(this.position, this.profil.pointAncrage);
     if (distanceAncrage <= this.profil.porteeRetour) {
       this.etat = 'patrouille';
+      this.indexRoutePatrouille = 0;
       this.prochaineCiblePatrouille = choisirCiblePatrouille(
         this.aleatoire,
         this.profil.pointAncrage,
         this.profil.rayonPatrouille,
         this.limites,
+        this.profil.routePatrouille,
+        this.indexRoutePatrouille,
       );
       this.capCible = angleVers(this.position, this.prochaineCiblePatrouille);
     }
@@ -543,7 +587,15 @@ function choisirCiblePatrouille(
   ancrage: Coordonnees,
   rayon: number,
   limites: LimitesZoneIaPirate,
+  route: readonly Coordonnees[] | undefined = undefined,
+  indexRoute = 0,
 ): Coordonnees {
+  if (route && route.length > 0) {
+    const point = route[Math.max(0, indexRoute) % route.length];
+    if (point) {
+      return bornerCoordonnees(point, limites);
+    }
+  }
   const cible = {
     x: ancrage.x + (aleatoire() * 2 - 1) * rayon,
     z: ancrage.z + (aleatoire() * 2 - 1) * rayon,
