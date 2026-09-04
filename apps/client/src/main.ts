@@ -1778,7 +1778,7 @@ function construireScene(): JeuClient | undefined {
     actualiserInterface();
 
     let synchroniseurPecheurs: SynchroniseurPecheursDistants | undefined;
-    let synchroniseurPilotageReseau: SynchroniseurPilotage | undefined;
+        let synchroniseurPilotageReseau: SynchroniseurPilotage | undefined;
     let emetteurTransformation: EmetteurTransformation | undefined;
     let retirerEtiquettesPecheurs: (() => void) | undefined;
 
@@ -1793,6 +1793,12 @@ function construireScene(): JeuClient | undefined {
         () => connecteurPanneau?.lireSalle()?.sessionId ?? '',
         scene,
       );
+      synchroniseurPilotageReseau = creerSynchroniseurPilotage({
+        obtenirSalle: () => connecteurPanneau?.lireSalle(),
+        sessionIdLocale: () => connecteurPanneau?.lireSalle()?.sessionId ?? '',
+        surEtatBarre: () => {
+        },
+      });
       emetteurTransformation = creerEmetteurTransformation(() => connecteurPanneau?.lireSalle());
       retirerEtiquettesPecheurs = installerEtiquettesPecheurs(
         () =>
@@ -1905,6 +1911,7 @@ function construireScene(): JeuClient | undefined {
       detruire: () => {
         retirerEtiquettesPecheurs?.();
         synchroniseurPecheurs?.liberer();
+        synchroniseurPilotageReseau?.detruire();
         entrees.detacher();
         window.removeEventListener('resize', redimensionner);
         moteur.stopRenderLoop(boucle);
