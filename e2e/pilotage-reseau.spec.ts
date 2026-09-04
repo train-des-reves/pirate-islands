@@ -23,6 +23,7 @@ type CrochetPilotage = {
   readonly lireEtat?: () => { readonly pilotage?: EtatPilotageE2E };
   readonly reinitialiser?: () => void;
   readonly deplacerBord?: (offset: { x: number; y?: number; z: number }) => void;
+  readonly demanderBarre?: () => void;
   readonly piloter?: (intentions: { poussee: number; gouvernail: number }) => void;
   readonly avancerTemps?: (deltaMs: number) => void;
   readonly positionnerJoueurE2E?: (position: { x: number; y: number; z: number }) => void;
@@ -102,6 +103,14 @@ async function avancerTemps(page: Page, deltaMs: number): Promise<void> {
       .__pirateIslandsE2E;
     crochet?.avancerTemps?.(delta);
   }, deltaMs);
+}
+
+async function demanderBarre(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const crochet = (window as unknown as { __pirateIslandsE2E?: CrochetPilotage })
+      .__pirateIslandsE2E;
+    crochet?.demanderBarre?.();
+  });
 }
 
 async function capturerComposite(pagePilote: Page, pageObservateur: Page): Promise<void> {
@@ -203,7 +212,7 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
     }
 
     await appeler(pagePilote, 'reinitialiser');
-    await pagePilote.keyboard.press('KeyE');
+    await demanderBarre(pagePilote);
     await attendreEtat(
       pagePilote,
       (état) => état.mode === 'bord',
@@ -226,7 +235,7 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
     );
 
     await appeler(pageObservateur, 'reinitialiser');
-    await pageObservateur.keyboard.press('KeyE');
+    await demanderBarre(pageObservateur);
     await attendreEtat(
       pageObservateur,
       (état) => état.mode === 'bord',
@@ -240,7 +249,7 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
     );
     const positionBateauAvantMouvement = (await lireEtat(pagePilote)).positionBateau;
     await appeler(pageObservateur, 'positionnerJoueurE2E', positionBateauAvantMouvement);
-    await pageObservateur.keyboard.press('KeyE');
+    await demanderBarre(pageObservateur);
     await attendreEtat(
       pageObservateur,
       (état) => état.mode === 'bord' && état.statutBarre === 'occupee',
