@@ -94,6 +94,23 @@ export const PirateSchema = schema(
 );
 export type Pirate = SchemaType<typeof PirateSchema>;
 
+export const LignePecheSchema = schema(
+  {
+    joueurId: t.string().default(''),
+    sequence: t.uint32().default(0),
+    phase: t.string().default('inactive'),
+    zoneId: t.string().default(''),
+    flotteurX: t.number().default(0),
+    flotteurY: t.number().default(0),
+    flotteurZ: t.number().default(0),
+    lanceAuMs: t.number().default(0),
+    morsureAuMs: t.number().default(0),
+    finMorsureMs: t.number().default(0),
+  },
+  'LignePeche',
+);
+export type LignePeche = SchemaType<typeof LignePecheSchema>;
+
 export const EtatSalleSchema = schema(
   {
     metadonnees: MetadonneesSalleSchema,
@@ -101,6 +118,7 @@ export const EtatSalleSchema = schema(
     joueurs: t.map(JoueurSchema),
     bateaux: t.map(BateauSchema),
     pirates: t.map(PirateSchema),
+    lignesPeche: t.map(LignePecheSchema),
     bateauxPirates: t.map(BateauPirateSchema),
   },
   'EtatSalle',
@@ -212,6 +230,7 @@ export function creerEtatSalle(options: {
       capaciteMaximale: CAPACITE_SALLE,
     }),
     phase: 'attente',
+    lignesPeche: {},
     bateauxPirates: {},
   });
 }

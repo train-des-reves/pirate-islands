@@ -5,6 +5,9 @@ import { figerProfondément } from './immuable.js';
 export const DELAI_MORSURE_MIN_MS = 500;
 export const DELAI_MORSURE_MAX_MS = 5000;
 export const DUREE_FENETRE_MORSURE_MS = 800;
+export const PORTEE_PECHE = 40;
+export const DISTANCE_ORIGINE_PECHE_ADMISE = 5;
+export const CADENCE_LANCER_PECHE_MS = 250;
 
 export type EspecePeche = 'sardine' | 'maquereau' | 'thon';
 export type TypeZonePeche = 'rivage' | 'quai';
@@ -106,7 +109,10 @@ export function calculerPrevisionPeche(graine: string, sequence: number): Previs
   const aleatoire = creerAleatoire(graine, sequence);
   const delaiMorsureMs = entier(aleatoire, DELAI_MORSURE_MIN_MS, DELAI_MORSURE_MAX_MS);
   const tirageEspece = aleatoire();
-  const indiceEspece = Math.min(ESPECES_POISSON.length - 1, Math.floor(tirageEspece * ESPECES_POISSON.length));
+  const indiceEspece = Math.min(
+    ESPECES_POISSON.length - 1,
+    Math.floor(tirageEspece * ESPECES_POISSON.length),
+  );
   const espece = ESPECES_POISSON[indiceEspece];
   if (!espece) {
     throw new Error('Aucune espèce tirée.');
@@ -144,7 +150,13 @@ export function lancerPeche(
   if (etat.phase !== 'inactive') {
     return etat;
   }
-  if (!Number.isFinite(temps) || temps < 0 || !Number.isFinite(sequence) || !Number.isInteger(sequence) || sequence < 0) {
+  if (
+    !Number.isFinite(temps) ||
+    temps < 0 ||
+    !Number.isFinite(sequence) ||
+    !Number.isInteger(sequence) ||
+    sequence < 0
+  ) {
     return etat;
   }
   const zone = monde.zonesPeche.find((candidate) => candidate.id === zoneId);
@@ -228,7 +240,11 @@ export function zonePecheValide(
   if (!Number.isFinite(zone.rayon) || zone.rayon <= 0) {
     return false;
   }
-  if (!Number.isFinite(zone.centre.x) || !Number.isFinite(zone.centre.y) || !Number.isFinite(zone.centre.z)) {
+  if (
+    !Number.isFinite(zone.centre.x) ||
+    !Number.isFinite(zone.centre.y) ||
+    !Number.isFinite(zone.centre.z)
+  ) {
     return false;
   }
   const ile = monde.iles.find((candidate) => candidate.id === zone.ileId);

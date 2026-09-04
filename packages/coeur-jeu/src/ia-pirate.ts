@@ -86,6 +86,12 @@ export interface LimitesZoneIaPirate {
   readonly largeur: number;
   readonly profondeur: number;
   readonly rayonTerrestreMax: number;
+  /** Centre du repère de la zone, en coordonnées monde. */
+  readonly centre?: Coordonnees;
+  /** Rayons de l’ellipse praticable, si la zone n’est pas rectangulaire. */
+  readonly rayonX?: number;
+  readonly rayonZ?: number;
+  readonly rotationY?: number;
 }
 
 /** Option de construction de la machine d'états. */
@@ -598,17 +604,27 @@ function choisirCiblePatrouille(
 }
 
 function bornerCoordonnees(coordonnees: Coordonnees, limites: LimitesZoneIaPirate): Coordonnees {
-  return {
-    x: bornerNombre(coordonnees.x, -limites.largeur / 2, limites.largeur / 2),
-    z: bornerNombre(coordonnees.z, -limites.profondeur / 2, limites.profondeur / 2),
-  };
-}
+  const centre = limites.centre ?? { x: 0, z: 0 };
+  const rayonX = limites.rayonX ?? limites.largeur / 2;
+  const rayonZ = limites.rayonZ ?? limites.profondeur / 2;
+  const rotationY = limites.rotationY ?? 0;
+  const cosinus = Math.cos(rotationY);
+  const sinus = Math.sin(rotationY);
+  const relatifX = coordonnees.x - centre.x;
+  const relatifZ = coordonnees.z - centre.z;
+  const localX = relatifX * cosinus + relatifZ * sinus;
+  const localZ = -relatifX * sinus + relatifZ * cosinus;
+  const rayonXSur = Math.max(0.001, rayonX);
+  const rayonZSur = Math.max(0.001, rayonZ);
+  const normeEllipse = Math.hypot(localX / rayonXSur, localZ / rayonZSur);
+  const facteur = normeEllipse > 1 ? 1 / normeEllipse : 1;
+  const borneLocalX = localX * facteur;
+  const borneLocalZ = localZ * facteur;
 
-function bornerNombre(valeur: number, minimum: number, maximum: number): number {
-  if (!Number.isFinite(valeur)) {
-    return minimum;
-  }
-  return Math.max(minimum, Math.min(maximum, valeur));
+  return {
+    x: centre.x + borneLocalX * cosinus - borneLocalZ * sinus,
+    z: centre.z + borneLocalX * sinus + borneLocalZ * cosinus,
+  };
 }
 
 function figerProfil(profil: ProfilIaPirate): ProfilIaPirate {
@@ -620,6 +636,10 @@ function figerLimites(limites: Partial<LimitesZoneIaPirate>): LimitesZoneIaPirat
     largeur: limites.largeur ?? 220,
     profondeur: limites.profondeur ?? 220,
     rayonTerrestreMax: limites.rayonTerrestreMax ?? 18,
+    ...(limites.centre === undefined ? {} : { centre: { ...limites.centre } }),
+    ...(limites.rayonX === undefined ? {} : { rayonX: limites.rayonX }),
+    ...(limites.rayonZ === undefined ? {} : { rayonZ: limites.rayonZ }),
+    ...(limites.rotationY === undefined ? {} : { rotationY: limites.rotationY }),
   });
 }
 

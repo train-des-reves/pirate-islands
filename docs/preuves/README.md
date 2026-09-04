@@ -100,6 +100,26 @@ URL déterministe : `http://127.0.0.1:4173/?e2e=1&temps=5000`.
 La branche produit `pistolet-tir-repos-1280x720.png`, `pistolet-tir-eclair-recul-1280x720.png`,
 `pistolet-tir-recuperation-1280x720.png` et `pistolet-tir.webm`.
 
+## Preuve visuelle — ATH combat et réapparition
+
+Scénario déterministe : ouvrir `/?e2e=1&diagnostic=salle&graine=mvp-defaut&combat=1`, attendre la
+salle, tirer sur le pirate, tirer dans le vide, infliger les dégâts de test au joueur, attendre la
+réapparition puis tirer à nouveau. Le relecteur vérifie l’ATH visible, les barres de santé dérivées
+de l’état serveur, le résultat d’impact ou de tir raté, l’état « Vous êtes tombé » et le retour à
+la pleine santé après réapparition.
+
+Commande exacte :
+
+```bash
+pnpm exec playwright test e2e/combat.spec.ts --workers=1
+```
+
+URL déterministe : `http://127.0.0.1:4173/?e2e=1&diagnostic=salle&graine=mvp-defaut&combat=1`.
+
+La branche produit `combat-tir-accepte-1280x720.png`, `combat-rate-sans-effet-1280x720.png`,
+`combat-joueur-mort-1280x720.png`, `combat-reapparition-1280x720.png`,
+`combat-rejeu-refuse-1280x720.png` et `combat-e2e-1280x720.gif`.
+
 ## Preuve des règles de pêche déterministes
 
 Scénario déterministe : ouvrir `/?e2e=1&presentation=regles-peche&graine=peche-mvp-v1`.

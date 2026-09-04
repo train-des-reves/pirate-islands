@@ -37,6 +37,7 @@ import {
   SynchroniseurPecheursDistants,
   type EmetteurTransformation,
 } from './jeu/synchroniseur-pecheurs';
+import { SynchroniseurPirates } from './jeu/synchroniseur-pirates';
 import { SynchroniseurPiratesMaritimes } from './jeu/synchroniseur-pirates-maritimes';
 import {
   construireMondeBabylon,
@@ -168,6 +169,32 @@ const combatReapparition = document.querySelector<HTMLElement>(
 );
 const combatResultat = document.querySelector<HTMLElement>('[data-testid="combat-resultat"]');
 const combatDeconnexion = document.querySelector<HTMLElement>('[data-testid="combat-deconnexion"]');
+const athCombat = document.querySelector<HTMLElement>('[data-testid="ath-combat"]');
+const athCombatCible = document.querySelector<HTMLElement>('[data-testid="ath-combat-cible"]');
+const athCombatSanteJoueur = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-sante-joueur"]',
+);
+const athCombatBarreJoueur = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-barre-joueur"]',
+);
+const athCombatSanteCible = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-sante-cible"]',
+);
+const athCombatBarreCible = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-barre-cible"]',
+);
+const athCombatResultat = document.querySelector<HTMLElement>(
+  '[data-testid="ath-combat-resultat"]',
+);
+const athCombatMort = document.querySelector<HTMLElement>('[data-testid="ath-combat-mort"]');
+const pecheJoueur = document.querySelector<HTMLElement>('[data-testid="peche-joueur"]');
+const pecheSequence = document.querySelector<HTMLElement>('[data-testid="peche-sequence"]');
+const pecheZone = document.querySelector<HTMLElement>('[data-testid="peche-zone"]');
+const pechePhase = document.querySelector<HTMLElement>('[data-testid="peche-phase"]');
+const pecheLignesActives = document.querySelector<HTMLElement>(
+  '[data-testid="peche-lignes-actives"]',
+);
+const pecheResultat = document.querySelector<HTMLElement>('[data-testid="peche-resultat"]');
 const diagnosticTir = document.querySelector<HTMLElement>('[data-testid="tir-diagnostic"]');
 const panneauAccueil = document.querySelector<HTMLElement>('[data-testid="panneau-accueil"]');
 const formulaireConnexion = document.querySelector<HTMLFormElement>(
@@ -221,6 +248,20 @@ if (
   !combatReapparition ||
   !combatResultat ||
   !combatDeconnexion ||
+  !athCombat ||
+  !athCombatCible ||
+  !athCombatSanteJoueur ||
+  !athCombatBarreJoueur ||
+  !athCombatSanteCible ||
+  !athCombatBarreCible ||
+  !athCombatResultat ||
+  !athCombatMort ||
+  !pecheJoueur ||
+  !pecheSequence ||
+  !pecheZone ||
+  !pechePhase ||
+  !pecheLignesActives ||
+  !pecheResultat ||
   !diagnosticTir ||
   !panneauAccueil ||
   !formulaireConnexion ||
@@ -409,20 +450,6 @@ for (const [action, bouton] of boutonsTouches) {
 
 window.addEventListener('keydown', capturerToucheReglage, true);
 afficherReglages(reglages);
-const diagnosticSalleJeu = diagnosticSalle;
-const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
-  conteneur: diagnosticSalleJeu,
-  identifiantSalle: diagnosticSalleId,
-  sessionId: diagnosticSessionId,
-  nombreJoueurs: diagnosticNombreJoueurs,
-  erreur: diagnosticSalleErreur,
-  cible: combatCible,
-  santeJoueur: combatSanteJoueur,
-  santePirate: combatSantePirate,
-  reapparition: combatReapparition,
-  resultat: combatResultat,
-  deconnexion: combatDeconnexion,
-};
 const indicateurTir = diagnosticTir;
 const panneauAccueilElement = panneauAccueil;
 const formulaireConnexionElement = formulaireConnexion;
@@ -510,6 +537,16 @@ declare global {
       rejouerTir?: () => void;
       /** Inflige des dégâts au joueur via le mannequin E2E serveur. */
       infligerDegatsE2E?: (degats: number) => void;
+      /** Positionne le joueur sur une île via le mannequin E2E serveur. */
+      positionnerJoueurE2E?: (position: { x: number; y: number; z: number }) => void;
+      /** Lit l’état autoritaire des pirates observé par ce client. */
+      lirePirates?: () => readonly {
+        readonly identifiant: string;
+        readonly sante: number;
+        readonly vivant: boolean;
+        readonly statut: string;
+        readonly position: { readonly x: number; readonly y: number; readonly z: number };
+      }[];
       /** Lit l'état de combat observé après synchronisation serveur. */
       lireCombat?: () => {
         readonly cibleId: string | null;
@@ -522,31 +559,34 @@ declare global {
       };
       /** Lit le dernier code de rejet/déconnexion observé depuis la salle. */
       lireDeconnexion?: () => number | undefined;
-      /** Lit les bateaux et équipages maritimes synchronisés. */
-      lireEtatMaritime?: () => {
-        readonly salleId: string | undefined;
-        readonly graine: string | undefined;
-        readonly nombreJoueurs: number;
-        readonly statutsObserves: readonly string[];
-        readonly bateaux: readonly {
-          readonly id: string;
-          readonly routeId: string;
-          readonly statut: string;
-          readonly vitesse: number;
-          readonly position: { readonly x: number; readonly y: number; readonly z: number };
-          readonly equipage: number;
-          readonly attaqueActive: boolean;
-        }[];
+      /** Prépare le joueur dans la première zone, uniquement pour le harnais E2E. */
+      preparerPecheE2E?: () => void;
+      avancerPecheE2E?: () => void;
+      lancerPeche?: () => void;
+      releverPeche?: () => void;
+      annulerPeche?: () => void;
+      lirePeche?: () => {
+        readonly lignesActives: number;
+        readonly ligneLocale:
+          | {
+              readonly joueurId: string;
+              readonly sequence: number;
+              readonly zoneId: string;
+              readonly phase: string;
+            }
+          | undefined;
+        readonly dernierResultat: unknown;
       };
+      quitterSalleE2E?: () => void;
     };
   }
 }
 
-/** Interface du jeu client exposé au harnais E2E et aux tests. */
 interface JeuClient {
   readonly moteur?: Engine;
   detruire: () => void;
 }
+
 const paramètres = new URLSearchParams(window.location.search);
 const modeE2E =
   import.meta.env.DEV && import.meta.env.VITE_E2E === '1' && paramètres.get('e2e') === '1';
@@ -554,17 +594,18 @@ const modePirates = modeE2E && paramètres.get('vue') === 'pirates';
 const animationPirates = modePirates && paramètres.get('animation') === '1';
 const structurePirates = modePirates && paramètres.get('structure') === '1';
 const modeBateauxPirates = modeE2E && paramètres.get('vue') === 'bateaux-pirates';
-const modePiratesMaritimes = modeE2E && paramètres.get('vue') === 'pirates-maritimes';
 const animationBateauxPirates = modeBateauxPirates && paramètres.get('animation') === '1';
 const structureBateauxPirates = modeBateauxPirates && paramètres.get('structure') === '1';
 const modeViseurIa = modeE2E && paramètres.get('vue') === 'ia';
 const modePecheursDistants = modeE2E && paramètres.get('vue') === 'pecheurs';
+const modePiratesMaritimes = modeE2E && paramètres.get('vue') === 'pirates-maritimes';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modePilotage = paramètres.get('pilotage') === '1';
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
+const modePecheAutoritaireE2E = modeDiagnosticSalle && paramètres.get('peche') === '1';
 const cameraDemandée = paramètres.get('camera');
 const modeCamera: ModeCameraMonde =
   cameraDemandée === 'rivage' ||
@@ -586,26 +627,58 @@ const modeMonde =
   paramètres.has('camera');
 const graine = paramètres.get('graine')?.trim() || GRAINE_MVP_PAR_DEFAUT;
 const monde = genererMonde(graine);
+const diagnosticSalleJeu = diagnosticSalle;
+const elementsDiagnosticSalle: ElementsDiagnosticSalle = {
+  conteneur: diagnosticSalleJeu,
+  identifiantSalle: diagnosticSalleId,
+  sessionId: diagnosticSessionId,
+  nombreJoueurs: diagnosticNombreJoueurs,
+  erreur: diagnosticSalleErreur,
+  cible: combatCible,
+  santeJoueur: combatSanteJoueur,
+  santePirate: combatSantePirate,
+  reapparition: combatReapparition,
+  resultat: combatResultat,
+  deconnexion: combatDeconnexion,
+  pecheJoueur,
+  pecheSequence,
+  pecheZone,
+  pechePhase,
+  pecheLignesActives,
+  pecheResultat,
+  ...(modeCombatE2E
+    ? {
+        athCombat: {
+          conteneur: athCombat,
+          cible: athCombatCible,
+          barreJoueur: athCombatBarreJoueur,
+          valeurJoueur: athCombatSanteJoueur,
+          barreCible: athCombatBarreCible,
+          valeurCible: athCombatSanteCible,
+          resultat: athCombatResultat,
+          mort: athCombatMort,
+        },
+      }
+    : {}),
+};
 
 conteneurApplication.dataset.mode = modeBateauxPirates
   ? 'bateaux-pirates'
-  : modePiratesMaritimes
-    ? 'pirates-maritimes'
-    : modeViseurIa
-      ? 'ia'
-      : modePilotage
-        ? 'pilote'
+  : modeViseurIa
+    ? 'ia'
+    : modePilotage
+      ? 'pilote'
       : modePecheursDistants
         ? 'pecheurs-distants'
         : modePirates
           ? 'pirates'
           : modePresentationCanne || modePresentationPeche
             ? 'presentation'
-              : modeDiagnosticSalle
-                ? 'diagnostic-salle'
-                : modeMonde
-                  ? 'monde'
-                  : 'bac';
+            : modeDiagnosticSalle
+              ? 'diagnostic-salle'
+              : modeMonde
+                ? 'monde'
+                : 'bac';
 conteneurApplication.dataset.graine = monde.graine;
 conteneurApplication.dataset.camera = modeCamera;
 conteneurApplication.dataset.presentation = présentationBateau
@@ -617,23 +690,19 @@ conteneurApplication.dataset.presentation = présentationBateau
       : 'aucune';
 conteneurApplication.dataset.vue = modeBateauxPirates
   ? 'bateaux-pirates'
-  : modePiratesMaritimes
-    ? 'pirates-maritimes'
-    : modeViseurIa
-      ? 'ia'
+  : modeViseurIa
+    ? 'ia'
+    : modePirates
+      ? 'pirates'
       : modePecheursDistants
         ? 'pecheurs'
-        : modePirates
-          ? 'pirates'
-          : 'standard';
+        : 'standard';
 conteneurApplication.dataset.structure =
   structureBateauxPirates || structurePirates ? 'oui' : 'non';
 conteneurApplication.dataset.iles = String(monde.iles.length);
 conteneurApplication.dataset.diagnostics =
   modeBateauxPirates ||
-  modePiratesMaritimes ||
   modeViseurIa ||
-  modePilotage ||
   modePecheursDistants ||
   modePirates ||
   (modeMonde && modeE2E)
@@ -699,6 +768,9 @@ if (présentationBateau) {
 
 canvasJeu.width = LARGEUR_REFERENCE;
 canvasJeu.height = HAUTEUR_REFERENCE;
+
+let diagnosticSalleConnecte: DiagnosticSalleConnecte | undefined;
+let connecteurPanneau: ConnecteurConnexion | undefined;
 
 function construireScene(): JeuClient | undefined {
   if (modeViseurIa) {
@@ -1212,172 +1284,13 @@ function construireScene(): JeuClient | undefined {
       };
     }
 
-    if (modePiratesMaritimes) {
-      scene.clearColor = new Color4(0.015, 0.12, 0.19, 1);
-      scene.fogMode = Scene.FOGMODE_EXP2;
-      scene.fogColor = new Color3(0.015, 0.12, 0.19);
-      scene.fogDensity = 0.008;
-
-      const ocean = MeshBuilder.CreateGround(
-        'ocean-rencontre-maritime',
-        { width: 220, height: 220, subdivisions: 24 },
-        scene,
-      );
-      const matériauOcéan = new StandardMaterial('matériau-ocean-rencontre-maritime', scene);
-      matériauOcéan.diffuseColor = new Color3(0.025, 0.24, 0.34);
-      matériauOcéan.specularColor = new Color3(0.16, 0.35, 0.4);
-      ocean.material = matériauOcéan;
-      ocean.isPickable = false;
-
-      const camera = new FreeCamera('camera-rencontre-maritime', new Vector3(0, 55, -29), scene);
-      camera.minZ = 0.1;
-      camera.maxZ = 300;
-      camera.fov = 0.86;
-      camera.setTarget(new Vector3(0, 0, -8));
-      scene.activeCamera = camera;
-
-      const lumière = new HemisphericLight(
-        'lumiere-rencontre-maritime',
-        new Vector3(-0.25, 1, -0.35),
-        scene,
-      );
-      lumière.intensity = 1.2;
-      lumière.diffuse = new Color3(0.82, 0.95, 1);
-      lumière.groundColor = new Color3(0.025, 0.08, 0.1);
-
-      let connexionMaritime: DiagnosticSalleConnecte | undefined;
-      let synchroniseurMaritime: SynchroniseurPiratesMaritimes | undefined;
-      const statutsMaritimesObserves = new Set<string>();
-      const lireEtatMaritime = () => {
-        const salle = connexionMaritime?.salle;
-        const bateaux = (salle ? [...salle.state.bateauxPirates.values()] : []).map((bateau) => ({
-          id: bateau.identifiant,
-          routeId: bateau.routeId,
-          statut: bateau.statut,
-          vitesse: bateau.vitesse,
-          position: {
-            x: bateau.transformation.x,
-            y: bateau.transformation.y,
-            z: bateau.transformation.z,
-          },
-          equipage: salle
-            ? [...salle.state.pirates.values()].filter(
-                (pirate) => pirate.bateauId === bateau.identifiant,
-              ).length
-            : 0,
-          attaqueActive: salle
-            ? [...salle.state.pirates.values()].some(
-                (pirate) => pirate.bateauId === bateau.identifiant && pirate.statut === 'attaque',
-              )
-            : false,
-        }));
-        for (const bateau of bateaux) {
-          statutsMaritimesObserves.add(bateau.statut);
-        }
-        return {
-          salleId: salle?.roomId,
-          graine: salle?.state.metadonnees.graine,
-          nombreJoueurs: salle?.state.joueurs.size ?? 0,
-          statutsObserves: [...statutsMaritimesObserves],
-          bateaux,
-        };
-      };
-
-      if (modeE2E) {
-        window.__pirateIslandsE2E = {
-          verrouillerPointeur: () => undefined,
-          libererPointeur: () => undefined,
-          lireEtat: () => ({
-            position: { x: 0, y: 0, z: 0 },
-            camera: { lacet: 0, tangage: 0 },
-            pause: false,
-            pointeurVerrouille: false,
-            collision: 'aucune',
-            reglages: reglages.applique,
-            tir: {
-              compteur: 0,
-              etat: { recul: 0, eclairBouche: false },
-              derniereIntention: undefined,
-              intentions: [],
-            },
-            peche: { modeActif: false, vue: 'rangee', sequence: 0, invite: null, statut: '' },
-          }),
-          lireReglages: () => reglages.applique,
-          reinitialiser: () => undefined,
-          tirer: () => undefined,
-          avancerTemps: () => undefined,
-          lireEtatMaritime,
-          tirerReseau: (cibleId?: string) => connexionMaritime?.tirer(cibleId),
-          lireCombat: () =>
-            connexionMaritime?.lireCombat() ?? {
-              cibleId: null,
-              santeJoueur: 100,
-              santePirate: 100,
-              pirateNeutralise: false,
-              enAttenteReapparition: false,
-              dernierResultat: undefined,
-              codeDeconnexion: undefined,
-            },
-          lireDeconnexion: () => connexionMaritime?.lireDeconnexion(),
-        };
-      }
-
-      const optionsMaritimes = { graine: monde.graine };
-      void connecterDiagnosticSalle(
-        import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567',
-        optionsMaritimes,
-        elementsDiagnosticSalle,
-        paramètres.get('room')?.trim() || undefined,
-      )
-        .then((connexion) => {
-          connexionMaritime = connexion;
-          synchroniseurMaritime = new SynchroniseurPiratesMaritimes(
-            () => connexionMaritime?.salle,
-            scene,
-          );
-        })
-        .catch((erreur: unknown) => afficherErreurDiagnosticSalle(erreur, elementsDiagnosticSalle));
-
-      scene.executeWhenReady(() => {
-        conteneurApplication.dataset.scene = 'ready';
-      });
-      let dernierTemps = performance.now();
-      const boucle = (): void => {
-        const maintenant = performance.now();
-        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
-        dernierTemps = maintenant;
-        lireEtatMaritime();
-        synchroniseurMaritime?.mettreAJour();
-        synchroniseurMaritime?.mettreAJourInterpolation(deltaSecondes);
-        scene.render();
-      };
-      moteur.runRenderLoop(boucle);
-      const redimensionner = (): void => moteur.resize();
-      window.addEventListener('resize', redimensionner);
-
-      return {
-        moteur,
-        detruire: () => {
-          window.removeEventListener('resize', redimensionner);
-          moteur.stopRenderLoop(boucle);
-          synchroniseurMaritime?.liberer();
-          connexionMaritime?.detruire();
-          ocean.dispose(false, true);
-          matériauOcéan.dispose();
-          camera.dispose();
-          lumière.dispose();
-          moteur.dispose();
-          delete window.__pirateIslandsE2E;
-        },
-      };
-    }
-
     if (modeMonde && !modePecheursDistants) {
       const mondeBabylon = construireMondeBabylon(scene, monde, { modeCamera });
       const retirerMarqueurs =
         modeE2E && !présentationBateau
           ? installerMarqueursE2E(scene, monde, mondeBabylon.camera)
           : undefined;
+      let synchroniseurPirates: SynchroniseurPirates | undefined;
 
       scene.executeWhenReady(() => {
         conteneurApplication.dataset.bateau = mondeBabylon.bateau.descripteur.id;
@@ -1391,7 +1304,24 @@ function construireScene(): JeuClient | undefined {
         );
         conteneurApplication.dataset.scene = 'ready';
       });
-      const boucle = (): void => scene.render();
+      let dernierTempsMonde = performance.now();
+      const boucle = (): void => {
+        const maintenant = performance.now();
+        const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTempsMonde) / 1000));
+        dernierTempsMonde = maintenant;
+        const salle = modeDiagnosticSalle ? diagnosticSalleConnecte?.salle : undefined;
+        if (salle) {
+          synchroniseurPirates ??= new SynchroniseurPirates(
+            () => diagnosticSalleConnecte?.salle,
+            scene,
+          );
+          synchroniseurPirates.mettreAJour();
+          for (const pirate of synchroniseurPirates.obtenirPirates()) {
+            pirate.mettreAJour(deltaSecondes);
+          }
+        }
+        scene.render();
+      };
       moteur.runRenderLoop(boucle);
       const redimensionner = (): void => moteur.resize();
       window.addEventListener('resize', redimensionner);
@@ -1400,6 +1330,7 @@ function construireScene(): JeuClient | undefined {
         moteur,
         detruire: () => {
           retirerMarqueurs?.();
+          synchroniseurPirates?.liberer();
           window.removeEventListener('resize', redimensionner);
           moteur.stopRenderLoop(boucle);
           mondeBabylon.liberer();
@@ -1812,10 +1743,6 @@ function construireScene(): JeuClient | undefined {
 
 const jeu = construireScene();
 
-let diagnosticSalleConnecte: DiagnosticSalleConnecte | undefined;
-
-let connecteurPanneau: ConnecteurConnexion | undefined;
-
 function actualiserStatutPanneau(etat: EtatConnexion, message?: string): void {
   statutConnexionElement.dataset.etat = etat;
   messageConnexionElement.textContent =
@@ -1963,7 +1890,7 @@ if (modeDiagnosticSalle) {
   )
     .then((connexion) => {
       diagnosticSalleConnecte = connexion;
-      if (modeCombatE2E) {
+      if (modeCombatE2E || modePecheAutoritaireE2E) {
         window.__pirateIslandsE2E = {
           verrouillerPointeur: () => undefined,
           libererPointeur: () => undefined,
@@ -1990,8 +1917,17 @@ if (modeDiagnosticSalle) {
           tirerDansLeVide: connexion.tirerDansLeVide,
           rejouerTir: connexion.rejouerDernierTir,
           infligerDegatsE2E: connexion.infligerDegatsE2E,
+          positionnerJoueurE2E: connexion.positionnerJoueurE2E,
+          lirePirates: connexion.lirePirates,
           lireCombat: connexion.lireCombat,
           lireDeconnexion: connexion.lireDeconnexion,
+          preparerPecheE2E: connexion.preparerPecheE2E,
+          avancerPecheE2E: connexion.avancerPecheE2E,
+          lancerPeche: connexion.lancerPeche,
+          releverPeche: connexion.releverPeche,
+          annulerPeche: connexion.annulerPeche,
+          lirePeche: connexion.lirePeche,
+          quitterSalleE2E: connexion.quitterSalleE2E,
         };
       }
     })
