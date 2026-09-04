@@ -87,6 +87,10 @@ interface MessagesSalle {
   [NOMS_MESSAGES.avancerPecheE2E]: MessageAvancerPecheE2E;
   [NOMS_MESSAGES.degatsE2E]: MessageDegatsE2E;
   [NOMS_MESSAGES.positionE2E]: MessagePositionE2E;
+  [NOMS_MESSAGES.demandeBarre]: MessageDemandeBarre;
+  [NOMS_MESSAGES.liberationBarre]: MessageLiberationBarre;
+  [NOMS_MESSAGES.intentionPilotage]: MessageIntentionPilotage;
+  [NOMS_MESSAGES.etatBarre]: MessageEtatBarre;
 }
 
 /** Données joueur privées conservées côté serveur, jamais dévoilées au client. */
@@ -1446,7 +1450,7 @@ export class SalleJeu extends Room<{
     bateau.piloteSessionId = client.sessionId;
     bateau.statut = 'en_mouvement';
 
-    this.state.broadcast(NOMS_MESSAGES.etatBarre, {
+    this.broadcast(NOMS_MESSAGES.etatBarre, {
       bateauId,
       piloteSessionId: client.sessionId,
       piloteNom: joueur.nom,
@@ -1485,7 +1489,7 @@ export class SalleJeu extends Room<{
     bateau.piloteSessionId = '';
     bateau.statut = 'amarré';
 
-    this.state.broadcast(NOMS_MESSAGES.etatBarre, {
+    this.broadcast(NOMS_MESSAGES.etatBarre, {
       bateauId,
       piloteSessionId: '',
       piloteNom: '',
