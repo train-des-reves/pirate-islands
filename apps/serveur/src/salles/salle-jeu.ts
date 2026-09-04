@@ -90,6 +90,20 @@ interface MessagesSalle {
 }
 
 /** Données joueur privées conservées côté serveur, jamais dévoilées au client. */
+interface EtatPilotageBateau {
+  id: string;
+  proprietaireSessionId: string;
+  piloteSessionId: string | null;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  rotationY: number;
+  vitesse: number;
+  vitesseAngulaire: number;
+  dernierSequence: number;
+  dernierEnvoiMs: number;
+}
+
 interface DonneesClientSalle {
   readonly indexApparition: number;
   readonly dernierTirMs: number;
@@ -196,6 +210,7 @@ export class SalleJeu extends Room<{
   private readonly etatsPeche = new Map<string, EtatPeche>();
   private monde: ReturnType<typeof genererMonde> = genererMonde();
   private modeE2E = false;
+  private readonly bateauxPilotage = new Map<string, EtatPilotageBateau>();
   private simulationMaritime: SimulationPiratesMaritimes | undefined;
   private accumulationMaritimeMs = 0;
   private readonly echeancesSuppressionBateaux = new Map<string, number>();
@@ -691,6 +706,21 @@ export class SalleJeu extends Room<{
 
     if (type === NOMS_MESSAGES.positionE2E) {
       this.traiterPositionE2E(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.demandeBarre) {
+      this.traiterDemandeBarre(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.liberationBarre) {
+      this.traiterLiberationBarre(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.intentionPilotage) {
+      this.traiterIntentionPilotage(client, message);
       return;
     }
 
@@ -1373,4 +1403,151 @@ export class SalleJeu extends Room<{
     client.error(code, raison);
     client.leave(code, raison);
   }
+
+  private traiterDemandeBarre(client: ClientSalle, message: unknown): void {
+    if (typeof message !== 'object' || message === null) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le message de demande de barre est invalide.');
+      return;
+    }
+    const objet = message as Record<string, unknown>;
+    if (!('bateauId' in objet) || typeof objet.bateauId !== 'string') {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le champ bateauId est requis.');
+      return;
+    }
+    const bateauId = objet.bateauId as string;
+    const bateau = this.state.bateaux.get(bateauId);
+    if (!bateau) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le bateau demandé n\'existe pas.');
+      return;
+    }
+    const joueur = this.state.joueurs.get(client.sessionId);
+    if (!joueur) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le joueur est inconnu.');
+      return;
+    }
+
+    if (bateau.piloteSessionId && bateau.piloteSessionId !== '') {
+      client.send(NOMS_MESSAGES.etatBarre, {
+        bateauId,
+        piloteSessionId: bateau.piloteSessionId,
+        piloteNom: '',
+        statut: 'occupee',
+        positionX: bateau.transformation.x,
+        positionY: bateau.transformation.y,
+        positionZ: bateau.transformation.z,
+        rotationY: bateau.transformation.lacet,
+        vitesse: bateau.vitesse,
+        vitesseAngulaire: bateau.vitesseAngulaire,
+        sequence: 0,
+      });
+      return;
+    }
+
+    bateau.piloteSessionId = client.sessionId;
+    bateau.statut = 'en_mouvement';
+
+    this.state.broadcast(NOMS_MESSAGES.etatBarre, {
+      bateauId,
+      piloteSessionId: client.sessionId,
+      piloteNom: joueur.nom,
+      statut: 'occupee',
+      positionX: bateau.transformation.x,
+      positionY: bateau.transformation.y,
+      positionZ: bateau.transformation.z,
+      rotationY: bateau.transformation.lacet,
+      vitesse: bateau.vitesse,
+      vitesseAngulaire: bateau.vitesseAngulaire,
+      sequence: 0,
+    });
+  }
+
+  private traiterLiberationBarre(client: ClientSalle, message: unknown): void {
+    if (typeof message !== 'object' || message === null) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le message de libération de barre est invalide.');
+      return;
+    }
+    const objet = message as Record<string, unknown>;
+    if (!('bateauId' in objet) || typeof objet.bateauId !== 'string') {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le champ bateauId est requis.');
+      return;
+    }
+    const bateauId = objet.bateauId as string;
+    const bateau = this.state.bateaux.get(bateauId);
+    if (!bateau) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le bateau demandé n\'existe pas.');
+      return;
+    }
+
+    if (bateau.piloteSessionId !== client.sessionId) {
+      return;
+    }
+
+    bateau.piloteSessionId = '';
+    bateau.statut = 'amarré';
+
+    this.state.broadcast(NOMS_MESSAGES.etatBarre, {
+      bateauId,
+      piloteSessionId: '',
+      piloteNom: '',
+      statut: 'libre',
+      positionX: bateau.transformation.x,
+      positionY: bateau.transformation.y,
+      positionZ: bateau.transformation.z,
+      rotationY: bateau.transformation.lacet,
+      vitesse: 0,
+      vitesseAngulaire: 0,
+      sequence: 0,
+    });
+  }
+
+  private traiterIntentionPilotage(client: ClientSalle, message: unknown): void {
+    if (typeof message !== 'object' || message === null) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'L\'intention de pilotage est invalide.');
+      return;
+    }
+    const objet = message as Record<string, unknown>;
+    if (!('bateauId' in objet) || typeof objet.bateauId !== 'string' ||
+        !('sequence' in objet) || typeof objet.sequence !== 'number' ||
+        !('poussee' in objet) || typeof objet.poussee !== 'number' ||
+        !('gouvernail' in objet) || typeof objet.gouvernail !== 'number') {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Les champs requis sont manquants.');
+      return;
+    }
+
+    const bateauId = objet.bateauId as string;
+    const bateau = this.state.bateaux.get(bateauId);
+    if (!bateau) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le bateau demandé n\'existe pas.');
+      return;
+    }
+
+    if (bateau.piloteSessionId !== client.sessionId) {
+      return;
+    }
+
+    const poussee = Math.max(-1, Math.min(1, objet.poussee as number));
+    const gouvernail = Math.max(-1, Math.min(1, objet.gouvernail as number));
+
+    const delta = 0.05;
+    let nouvelleVitesse = bateau.vitesse;
+
+    if (Math.abs(poussee) > 0.01) {
+      nouvelleVitesse += poussee * 4.5 * delta;
+    }
+    nouvelleVitesse -= nouvelleVitesse * 1.6 * delta;
+    const vitesseMax = poussee >= 0 ? 12 : 3;
+    nouvelleVitesse = Math.max(-vitesseMax, Math.min(vitesseMax, nouvelleVitesse));
+
+    const effetVitesse = Math.abs(nouvelleVitesse) > 0.01 ? Math.min(1, Math.abs(nouvelleVitesse) / 2) : 0;
+    const sens = nouvelleVitesse < -0.01 ? -1 : 1;
+    const vitesseAngulaire = Math.max(-1.1, Math.min(1.1, gouvernail * sens * 1.1 * effetVitesse));
+
+    const deplacement = nouvelleVitesse * delta;
+    bateau.transformation.x += Math.sin(bateau.transformation.lacet) * deplacement;
+    bateau.transformation.z += Math.cos(bateau.transformation.lacet) * deplacement;
+    bateau.transformation.lacet += vitesseAngulaire * delta;
+    bateau.vitesse = nouvelleVitesse;
+    bateau.vitesseAngulaire = vitesseAngulaire;
+  }
+
 }
