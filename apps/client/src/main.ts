@@ -38,7 +38,6 @@ import {
   type EmetteurTransformation,
 } from './jeu/synchroniseur-pecheurs';
 import { SynchroniseurPirates } from './jeu/synchroniseur-pirates';
-import { SynchroniseurPiratesMaritimes } from './jeu/synchroniseur-pirates-maritimes';
 import {
   construireMondeBabylon,
   estModePresentationBateau,
@@ -598,7 +597,6 @@ const animationBateauxPirates = modeBateauxPirates && paramètres.get('animation
 const structureBateauxPirates = modeBateauxPirates && paramètres.get('structure') === '1';
 const modeViseurIa = modeE2E && paramètres.get('vue') === 'ia';
 const modePecheursDistants = modeE2E && paramètres.get('vue') === 'pecheurs';
-const modePiratesMaritimes = modeE2E && paramètres.get('vue') === 'pirates-maritimes';
 const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
