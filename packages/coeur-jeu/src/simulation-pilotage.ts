@@ -1,7 +1,5 @@
 /** Simulation serveur du pilotage autoritaire du bateau de pêche. */
 
-import { genererMonde, type DescripteurMonde } from './monde.js';
-
 /** Constantes de simulation du bateau, identiques au client. */
 export const VITESSE_MAXIMALE_BATEAU = 12;
 export const VITESSE_MAXIMALE_RECUL_BATEAU = 3;
@@ -84,7 +82,7 @@ export function appliquerIntentionPilotage(
   // Calculer la vitesse angulaire
   const effetVitesse = Math.abs(nouvelleVitesse) > 0.01 ? Math.min(1, Math.abs(nouvelleVitesse) / 2) : 0;
   const sens = nouvelleVitesse < -0.01 ? -1 : 1;
-  let vitesseAngulaire = Math.max(-VITESSE_ANGULAIRE_MAXIMALE_BATEAU,
+  const vitesseAngulaire = Math.max(-VITESSE_ANGULAIRE_MAXIMALE_BATEAU,
     Math.min(VITESSE_ANGULAIRE_MAXIMALE_BATEAU,
       gouvernailBorne * sens * VITESSE_ANGULAIRE_MAXIMALE_BATEAU * effetVitesse));
 
