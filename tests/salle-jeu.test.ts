@@ -10,6 +10,8 @@ import {
   SANTE_JOUEUR_MAXIMALE,
   SANTE_PIRATE_MAXIMALE,
   type EtatSalle,
+  type MessageEtatBarre,
+  type MessageRefusBarre,
   type MessageResultatTir,
 } from '@pirate/protocole';
 import { genererMonde, resoudreCibleTiree } from '@pirate/coeur-jeu';
@@ -143,6 +145,36 @@ function attendreResultatTir(salle: Room<unknown, EtatSalle>): Promise<MessageRe
 
 function attendreDeconnexion(salle: Room<unknown, EtatSalle>): Promise<number> {
   return new Promise((résoudre) => salle.onLeave.once(résoudre));
+}
+
+function attendreEtatBarre(salle: Room<unknown, EtatSalle>): Promise<MessageEtatBarre> {
+  return new Promise((résoudre, rejeter) => {
+    let détacher = (): void => undefined;
+    const délai = setTimeout(() => {
+      détacher();
+      rejeter(new Error('Délai dépassé en attendant l’état de barre.'));
+    }, 5_000);
+    détacher = salle.onMessage(NOMS_MESSAGES.etatBarre, (message: unknown) => {
+      clearTimeout(délai);
+      détacher();
+      résoudre(message as MessageEtatBarre);
+    });
+  });
+}
+
+function attendreRefusBarre(salle: Room<unknown, EtatSalle>): Promise<MessageRefusBarre> {
+  return new Promise((résoudre, rejeter) => {
+    let détacher = (): void => undefined;
+    const délai = setTimeout(() => {
+      détacher();
+      rejeter(new Error('Délai dépassé en attendant le refus de barre.'));
+    }, 5_000);
+    détacher = salle.onMessage(NOMS_MESSAGES.refusBarre, (message: unknown) => {
+      clearTimeout(délai);
+      détacher();
+      résoudre(message as MessageRefusBarre);
+    });
+  });
 }
 
 function creerIntentionDeTir(
@@ -783,4 +815,237 @@ describe('SalleJeu Colyseus', () => {
     expect(premièreSalle.state.joueurs.get(secondSession)?.vivant).toBe(true);
     serveurModeE2E = false;
   });
+
+  it('accorde une seule barre à un joueur proche, puis permet une reprise', async () => {
+    serveurModeE2E = true;
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient, undefined, {
+      graine: 'pilotage-reseau',
+    });
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId, {
+      graine: 'pilotage-reseau',
+    });
+    await attendreNombreJoueurs(premièreSalle, 2);
+
+    const bateauId = [...premièreSalle.state.bateaux.keys()][0];
+    if (!bateauId) {
+      throw new Error('Le bateau partagé est attendu.');
+    }
+
+    const premierÉtat = attendreEtatBarre(premièreSalle);
+    const secondÉtat = attendreEtatBarre(secondeSalle);
+    premièreSalle.send(NOMS_MESSAGES.demandeBarre, { bateauId });
+    await expect(premierÉtat).resolves.toMatchObject({
+      bateauId,
+      piloteSessionId: premièreSalle.sessionId,
+      statut: 'occupee',
+    });
+    await expect(secondÉtat).resolves.toMatchObject({
+      bateauId,
+      piloteSessionId: premièreSalle.sessionId,
+      statut: 'occupee',
+    });
+    await attendreCondition(
+      secondeSalle,
+      () => secondeSalle.state.bateaux.get(bateauId)?.piloteSessionId === premièreSalle.sessionId,
+      'l’état de barre n’est pas synchronisé chez le second client',
+    );
+
+    const refusOccupee = attendreRefusBarre(secondeSalle);
+    secondeSalle.send(NOMS_MESSAGES.demandeBarre, { bateauId });
+    await expect(refusOccupee).resolves.toMatchObject({
+      bateauId,
+      motif: 'barre-occupee',
+    });
+    expect(secondeSalle.state.bateaux.get(bateauId)?.piloteSessionId).toBe(premièreSalle.sessionId);
+
+    const liberation = attendreEtatBarre(secondeSalle);
+    premièreSalle.send(NOMS_MESSAGES.liberationBarre, { bateauId });
+    await expect(liberation).resolves.toMatchObject({
+      bateauId,
+      piloteSessionId: '',
+      statut: 'libre',
+      vitesse: 0,
+    });
+
+    const refusDistance = attendreRefusBarre(secondeSalle);
+    secondeSalle.send(NOMS_MESSAGES.demandeBarre, { bateauId });
+    await expect(refusDistance).resolves.toMatchObject({ bateauId, motif: 'distance' });
+
+    const bateau = premièreSalle.state.bateaux.get(bateauId);
+    if (!bateau) {
+      throw new Error('Le bateau partagé est introuvable après libération.');
+    }
+    secondeSalle.send(NOMS_MESSAGES.positionE2E, {
+      position: {
+        x: bateau.transformation.x,
+        y: bateau.transformation.y,
+        z: bateau.transformation.z,
+      },
+    });
+    await attendreCondition(
+      premièreSalle,
+      () =>
+        Math.abs(
+          (premièreSalle.state.joueurs.get(secondeSalle.sessionId)?.transformation.x ?? 0) -
+            bateau.transformation.x,
+        ) < 0.001,
+      'le second joueur n’est pas revenu près de la barre',
+    );
+
+    const reprise = attendreEtatBarre(premièreSalle);
+    secondeSalle.send(NOMS_MESSAGES.demandeBarre, { bateauId });
+    await expect(reprise).resolves.toMatchObject({
+      bateauId,
+      piloteSessionId: secondeSalle.sessionId,
+      statut: 'occupee',
+    });
+    await attendreCondition(
+      premièreSalle,
+      () => premièreSalle.state.bateaux.get(bateauId)?.piloteSessionId === secondeSalle.sessionId,
+      'la reprise de barre n’est pas synchronisée chez le premier observateur',
+    );
+    expect(premièreSalle.state.bateaux.get(bateauId)?.piloteSessionId).toBe(secondeSalle.sessionId);
+  }, 30_000);
+
+  it('ignore les intentions non-pilote, non finies, trop rapides et rejouées', async () => {
+    serveurModeE2E = true;
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient);
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId);
+    await attendreNombreJoueurs(premièreSalle, 2);
+
+    const bateauId = [...premièreSalle.state.bateaux.keys()][0];
+    if (!bateauId) {
+      throw new Error('Le bateau partagé est attendu.');
+    }
+    const bateau = premièreSalle.state.bateaux.get(bateauId);
+    if (!bateau) {
+      throw new Error('Le bateau partagé est introuvable.');
+    }
+
+    const positionInitiale = {
+      x: bateau.transformation.x,
+      y: bateau.transformation.y,
+      z: bateau.transformation.z,
+    };
+    secondeSalle.send(NOMS_MESSAGES.intentionPilotage, {
+      bateauId,
+      sequence: 1,
+      poussee: 1,
+      gouvernail: 0,
+      horodatageClient: Date.now(),
+    });
+    await new Promise((résoudre) => setTimeout(résoudre, 150));
+    expect(bateau.transformation.x).toBe(positionInitiale.x);
+    expect(bateau.transformation.z).toBe(positionInitiale.z);
+
+    const acquisition = attendreEtatBarre(premièreSalle);
+    premièreSalle.send(NOMS_MESSAGES.demandeBarre, { bateauId });
+    await expect(acquisition).resolves.toMatchObject({ piloteSessionId: premièreSalle.sessionId });
+
+    let dernièreSéquence = 0;
+    premièreSalle.onMessage(NOMS_MESSAGES.etatBarre, (message: MessageEtatBarre) => {
+      dernièreSéquence = message.sequence;
+    });
+
+    premièreSalle.send(NOMS_MESSAGES.intentionPilotage, {
+      bateauId,
+      sequence: 1,
+      poussee: 1,
+      gouvernail: 0,
+      horodatageClient: Date.now(),
+    });
+    premièreSalle.send(NOMS_MESSAGES.intentionPilotage, {
+      bateauId,
+      sequence: 2,
+      poussee: 1,
+      gouvernail: 0,
+      horodatageClient: Date.now(),
+    });
+    premièreSalle.send(NOMS_MESSAGES.intentionPilotage, {
+      bateauId,
+      sequence: 3,
+      poussee: Number.NaN,
+      gouvernail: 0,
+      horodatageClient: Date.now(),
+    });
+    await new Promise((résoudre) => setTimeout(résoudre, 150));
+    expect(dernièreSéquence).toBeLessThanOrEqual(1);
+    expect(bateau.transformation.x).not.toBeNaN();
+    expect(bateau.transformation.z).not.toBeNaN();
+  }, 30_000);
+
+  it('arrête le bateau et libère la barre lorsque le pilote se déconnecte', async () => {
+    serveurModeE2E = true;
+    const premierClient = await ouvrirClient();
+    const premièreSalle = await rejoindreSalle(premierClient);
+    const secondClient = await ouvrirClient();
+    const secondeSalle = await rejoindreSalle(secondClient, premièreSalle.roomId);
+    await attendreNombreJoueurs(premièreSalle, 2);
+
+    const bateauId = [...premièreSalle.state.bateaux.keys()][0];
+    if (!bateauId) {
+      throw new Error('Le bateau partagé est attendu.');
+    }
+    premièreSalle.send(NOMS_MESSAGES.demandeBarre, { bateauId });
+    await expect
+      .poll(() => premièreSalle.state.bateaux.get(bateauId)?.piloteSessionId, { timeout: 2_000 })
+      .toBe(premièreSalle.sessionId);
+    premièreSalle.send(NOMS_MESSAGES.intentionPilotage, {
+      bateauId,
+      sequence: 1,
+      poussee: 1,
+      gouvernail: 0,
+      horodatageClient: Date.now(),
+    });
+    await expect
+      .poll(() => premièreSalle.state.bateaux.get(bateauId)?.vitesse, { timeout: 2_000 })
+      .toBeGreaterThan(0);
+    await expect
+      .poll(() => secondeSalle.state.bateaux.get(bateauId)?.vitesse, { timeout: 2_000 })
+      .toBeGreaterThan(0);
+    await expect
+      .poll(() => secondeSalle.state.bateaux.get(bateauId)?.transformation.z, { timeout: 2_000 })
+      .not.toBe(0);
+
+    await premièreSalle.leave();
+    sallesOuvertes.splice(sallesOuvertes.indexOf(premièreSalle), 1);
+    await attendreCondition(
+      secondeSalle,
+      () => {
+        const bateau = secondeSalle.state.bateaux.get(bateauId);
+        return bateau?.piloteSessionId === '' && bateau.vitesse === 0;
+      },
+      'la barre ne s’est pas libérée après la déconnexion',
+    );
+    expect(secondeSalle.state.bateaux.has(bateauId)).toBe(true);
+
+    const reprise = attendreEtatBarre(secondeSalle);
+    secondeSalle.send(NOMS_MESSAGES.positionE2E, {
+      position: {
+        x: secondeSalle.state.bateaux.get(bateauId)?.transformation.x ?? 0,
+        y: secondeSalle.state.bateaux.get(bateauId)?.transformation.y ?? 0,
+        z: secondeSalle.state.bateaux.get(bateauId)?.transformation.z ?? 0,
+      },
+    });
+    secondeSalle.send(NOMS_MESSAGES.demandeBarre, { bateauId });
+    await expect(reprise).resolves.toMatchObject({
+      bateauId,
+      piloteSessionId: secondeSalle.sessionId,
+      statut: 'occupee',
+    });
+    secondeSalle.send(NOMS_MESSAGES.intentionPilotage, {
+      bateauId,
+      sequence: 1,
+      poussee: 1,
+      gouvernail: 0,
+      horodatageClient: Date.now(),
+    });
+    await expect
+      .poll(() => secondeSalle.state.bateaux.get(bateauId)?.vitesse, { timeout: 2_000 })
+      .toBeGreaterThan(0);
+  }, 30_000);
 });

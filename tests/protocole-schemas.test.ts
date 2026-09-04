@@ -28,6 +28,9 @@ describe('schémas multijoueur', () => {
     joueur.transformation.x = -12.5;
     bateau.sante = 91;
     bateau.transformation.z = 8.25;
+    bateau.piloteSessionId = 'session-a';
+    bateau.vitesse = 3.5;
+    bateau.vitesseAngulaire = 0.4;
     pirate.sante = 73;
     pirate.vivant = false;
     pirate.statut = 'neutralisé';
@@ -75,7 +78,10 @@ describe('schémas multijoueur', () => {
     expect(copie.bateaux.get('bateau-session-a')).toMatchObject({
       proprietaireSessionId: 'session-a',
       sante: 91,
+      piloteSessionId: 'session-a',
+      vitesse: 3.5,
     });
+    expect(copie.bateaux.get('bateau-session-a')?.vitesseAngulaire).toBeCloseTo(0.4, 6);
     expect(copie.pirates.get('pirate-a')).toMatchObject({
       identifiant: 'pirate-a',
       sante: 73,

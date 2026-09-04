@@ -18,6 +18,7 @@ export const NOMS_MESSAGES = Object.freeze({
   liberationBarre: 'bateau:liberation-barre',
   intentionPilotage: 'bateau:intention-pilotage',
   etatBarre: 'bateau:etat-barre',
+  refusBarre: 'bateau:refus-barre',
 } as const);
 
 export type NomMessage = (typeof NOMS_MESSAGES)[keyof typeof NOMS_MESSAGES];
@@ -121,4 +122,3 @@ export interface MessageDegatsE2E {
 export interface MessagePositionE2E {
   readonly position: PositionJoueur;
 }
-

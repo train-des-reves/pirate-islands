@@ -1,6 +1,6 @@
 /** Simulation serveur du pilotage autoritaire du bateau de pêche. */
 
-/** Constantes de simulation du bateau, identiques au client. */
+/** Constantes de simulation du bateau, partagées par le serveur et les tests. */
 export const VITESSE_MAXIMALE_BATEAU = 12;
 export const VITESSE_MAXIMALE_RECUL_BATEAU = 3;
 export const ACCELERATION_BATEAU = 4.5;
@@ -8,10 +8,16 @@ export const TRAINEE_BATEAU = 1.6;
 export const VITESSE_ANGULAIRE_MAXIMALE_BATEAU = 1.1;
 export const DELTA_SIMULATION_BATEAU = 0.05;
 
+/** Intentions normalisées conservées par le serveur entre deux pas fixes. */
+export interface IntentionsPilotageServeur {
+  readonly poussee: number;
+  readonly gouvernail: number;
+}
+
 /** État serveur complet d'un bateau de pêche. */
 export interface EtatBateauPilotage {
   readonly id: string;
-  readonly proprietaireSessionId: string;
+  proprietaireSessionId: string;
   piloteSessionId: string | null;
   positionX: number;
   positionY: number;
@@ -47,6 +53,44 @@ export function creerEtatBateauPilotage(
   };
 }
 
+/** Simule exactement un pas fixe avec l'intention actuellement retenue. */
+export function simulerPasPilotage(
+  bateau: EtatBateauPilotage,
+  intentions: IntentionsPilotageServeur,
+): void {
+  const poussee = bornerCommande(intentions.poussee);
+  const gouvernail = bornerCommande(intentions.gouvernail);
+  const delta = DELTA_SIMULATION_BATEAU;
+
+  let nouvelleVitesse = Number.isFinite(bateau.vitesse) ? bateau.vitesse : 0;
+  if (Math.abs(poussee) > 0.01) {
+    nouvelleVitesse += poussee * ACCELERATION_BATEAU * delta;
+  }
+  nouvelleVitesse -= nouvelleVitesse * TRAINEE_BATEAU * delta;
+
+  const vitesseMax = poussee >= 0 ? VITESSE_MAXIMALE_BATEAU : VITESSE_MAXIMALE_RECUL_BATEAU;
+  nouvelleVitesse = Math.max(-vitesseMax, Math.min(vitesseMax, nouvelleVitesse));
+
+  const effetVitesse =
+    Math.abs(nouvelleVitesse) > 0.01 ? Math.min(1, Math.abs(nouvelleVitesse) / 2) : 0;
+  const sens = nouvelleVitesse < -0.01 ? -1 : 1;
+  const vitesseAngulaire = Math.max(
+    -VITESSE_ANGULAIRE_MAXIMALE_BATEAU,
+    Math.min(
+      VITESSE_ANGULAIRE_MAXIMALE_BATEAU,
+      gouvernail * sens * VITESSE_ANGULAIRE_MAXIMALE_BATEAU * effetVitesse,
+    ),
+  );
+
+  const rotation = Number.isFinite(bateau.rotationY) ? bateau.rotationY : 0;
+  const deplacement = nouvelleVitesse * delta;
+  bateau.positionX += Math.sin(rotation) * deplacement;
+  bateau.positionZ += Math.cos(rotation) * deplacement;
+  bateau.rotationY = normaliserAngle(rotation + vitesseAngulaire * delta);
+  bateau.vitesse = nouvelleVitesse;
+  bateau.vitesseAngulaire = vitesseAngulaire;
+}
+
 /** Applique une intention de pilotage au bateau. Retourne true si acceptée. */
 export function appliquerIntentionPilotage(
   bateau: EtatBateauPilotage,
@@ -59,64 +103,71 @@ export function appliquerIntentionPilotage(
   if (bateau.piloteSessionId !== sessionIdPilote) {
     return false;
   }
-  if (sequence <= bateau.dernierSequence) {
+  if (!Number.isSafeInteger(sequence) || sequence <= bateau.dernierSequence) {
+    return false;
+  }
+  if (
+    !Number.isFinite(poussee) ||
+    !Number.isFinite(gouvernail) ||
+    poussee < -1 ||
+    poussee > 1 ||
+    gouvernail < -1 ||
+    gouvernail > 1
+  ) {
+    return false;
+  }
+  if (!Number.isFinite(maintenantMs)) {
+    return false;
+  }
+  if (bateau.dernierEnvoiMs > 0 && maintenantMs - bateau.dernierEnvoiMs < 50) {
     return false;
   }
 
-  // Borner les valeurs
-  const pousseeBorne = Math.max(-1, Math.min(1, poussee));
-  const gouvernailBorne = Math.max(-1, Math.min(1, gouvernail));
-
-  // Calculer la vitesse
-  const delta = DELTA_SIMULATION_BATEAU;
-  let nouvelleVitesse = bateau.vitesse;
-
-  if (Math.abs(pousseeBorne) > 0.01) {
-    nouvelleVitesse += pousseeBorne * ACCELERATION_BATEAU * delta;
-  }
-  nouvelleVitesse -= nouvelleVitesse * TRAINEE_BATEAU * delta;
-
-  const vitesseMax = pousseeBorne >= 0 ? VITESSE_MAXIMALE_BATEAU : VITESSE_MAXIMALE_RECUL_BATEAU;
-  nouvelleVitesse = Math.max(-vitesseMax, Math.min(vitesseMax, nouvelleVitesse));
-
-  // Calculer la vitesse angulaire
-  const effetVitesse = Math.abs(nouvelleVitesse) > 0.01 ? Math.min(1, Math.abs(nouvelleVitesse) / 2) : 0;
-  const sens = nouvelleVitesse < -0.01 ? -1 : 1;
-  const vitesseAngulaire = Math.max(-VITESSE_ANGULAIRE_MAXIMALE_BATEAU,
-    Math.min(VITESSE_ANGULAIRE_MAXIMALE_BATEAU,
-      gouvernailBorne * sens * VITESSE_ANGULAIRE_MAXIMALE_BATEAU * effetVitesse));
-
-  // Appliquer le déplacement
-  const deplacement = nouvelleVitesse * delta;
-  const directionAvant = {
-    x: Math.sin(bateau.rotationY),
-    z: Math.cos(bateau.rotationY),
-  };
-
-  const nouvelleRotation = bateau.rotationY + vitesseAngulaire * delta;
-  const nouveauX = bateau.positionX + directionAvant.x * deplacement;
-  const nouveauZ = bateau.positionZ + directionAvant.z * deplacement;
-
-  // Mettre à jour l'état (mutabilité contrôlée côté serveur)
-  (bateau as { vitesse: number }).vitesse = nouvelleVitesse;
-  (bateau as { vitesseAngulaire: number }).vitesseAngulaire = vitesseAngulaire;
-  (bateau as { rotationY: number }).rotationY = normaliserAngle(nouvelleRotation);
-  (bateau as { positionX: number }).positionX = nouveauX;
-  (bateau as { positionZ: number }).positionZ = nouveauZ;
-  (bateau as { dernierSequence: number }).dernierSequence = sequence;
-  (bateau as { dernierEnvoiMs: number }).dernierEnvoiMs = maintenantMs;
-
+  simulerPasPilotage(bateau, { poussee, gouvernail });
+  bateau.dernierSequence = sequence;
+  bateau.dernierEnvoiMs = maintenantMs;
   return true;
 }
 
-/** Applique la traînée au bateau (appelé à chaque tick serveur). */
+/** Applique la traînée au bateau lorsqu'aucun pilote ne tient la barre. */
 export function appliquerTraînéeBateau(bateau: EtatBateauPilotage, deltaSecondes: number): void {
-  if (bateau.piloteSessionId === null) {
-    // Sans pilote, le bateau ralentit rapidement
-    const nouvelleVitesse = bateau.vitesse * (1 - TRAINEE_BATEAU * deltaSecondes * 2);
-    (bateau as { vitesse: number }).vitesse = Math.abs(nouvelleVitesse) < 0.01 ? 0 : nouvelleVitesse;
-    (bateau as { vitesseAngulaire: number }).vitesseAngulaire = bateau.vitesseAngulaire * (1 - TRAINEE_BATEAU * deltaSecondes * 3);
+  if (bateau.piloteSessionId !== null) {
+    return;
   }
+
+  const delta = Number.isFinite(deltaSecondes) ? Math.max(0, deltaSecondes) : 0;
+  const nouvelleVitesse =
+    (Number.isFinite(bateau.vitesse) ? bateau.vitesse : 0) * Math.exp(-TRAINEE_BATEAU * delta * 2);
+  bateau.vitesse = Math.abs(nouvelleVitesse) < 0.01 ? 0 : nouvelleVitesse;
+  bateau.vitesseAngulaire =
+    (Number.isFinite(bateau.vitesseAngulaire) ? bateau.vitesseAngulaire : 0) *
+    Math.exp(-TRAINEE_BATEAU * delta * 3);
+}
+
+/** Avance un accumulateur en nombre de pas fixes et retourne le reliquat. */
+export function avancerPilotageParPasFixes(
+  bateau: EtatBateauPilotage,
+  intentions: IntentionsPilotageServeur,
+  deltaMs: number,
+  accumulationMs = 0,
+): number {
+  let accumulation = Number.isFinite(accumulationMs) ? Math.max(0, accumulationMs) : 0;
+  accumulation += Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+  accumulation = Math.min(1_000, accumulation);
+
+  while (accumulation >= DELTA_SIMULATION_BATEAU * 1_000) {
+    simulerPasPilotage(bateau, intentions);
+    accumulation -= DELTA_SIMULATION_BATEAU * 1_000;
+  }
+
+  return accumulation;
+}
+
+function bornerCommande(valeur: number): number {
+  if (!Number.isFinite(valeur)) {
+    return 0;
+  }
+  return Math.max(-1, Math.min(1, valeur));
 }
 
 function normaliserAngle(angle: number): number {

@@ -740,7 +740,9 @@ h1 {
   background: linear-gradient(90deg, #7ff4b1, #c7ffb5);
   box-shadow: 0 0 12px rgba(127, 244, 177, 0.4);
   transform-origin: left center;
-  transition: transform 180ms ease, background 180ms ease;
+  transition:
+    transform 180ms ease,
+    background 180ms ease;
 }
 
 .ath-combat__ligne--cible .ath-combat__barre > span {
@@ -1902,6 +1904,17 @@ h1 {
 
 .invite-pilotage-texte[data-mode='pilote'] {
   color: #ffe4a3;
+}
+
+.invite-pilotage-statut {
+  margin: 0;
+  color: #ffd78a;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.invite-pilotage-statut[data-etat='refusee'] {
+  color: #ffb0a6;
 }
 
 .invite-pilotage-diagnostic {
