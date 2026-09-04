@@ -38,6 +38,7 @@ import {
   type EmetteurTransformation,
 } from './jeu/synchroniseur-pecheurs';
 import { SynchroniseurPiratesMaritimes } from './jeu/synchroniseur-pirates-maritimes';
+import { creerSynchroniseurPilotage, type SynchroniseurPilotage } from './jeu/synchroniseur-pilotage';
 import { SynchroniseurPirates } from './jeu/synchroniseur-pirates';
 import {
   construireMondeBabylon,
@@ -1777,6 +1778,7 @@ function construireScene(): JeuClient | undefined {
     actualiserInterface();
 
     let synchroniseurPecheurs: SynchroniseurPecheursDistants | undefined;
+    let synchroniseurPilotageReseau: SynchroniseurPilotage | undefined;
     let emetteurTransformation: EmetteurTransformation | undefined;
     let retirerEtiquettesPecheurs: (() => void) | undefined;
 
