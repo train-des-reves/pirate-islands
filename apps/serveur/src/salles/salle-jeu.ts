@@ -204,7 +204,7 @@ export class SalleJeu extends Room<{
   /** Injecte une horloge contrôlée avant l-initialisation de la salle. */
   configurerHorloge(horloge: HorlogeSimulation): void {
     this.horloge = horloge;
-  },
+  }
 
   override onCreate(options: unknown): void {
     const validation = validerOptionsConnexion(options);
