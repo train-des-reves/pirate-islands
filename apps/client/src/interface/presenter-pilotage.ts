@@ -1,5 +1,12 @@
 import type { EtatHarnaisPilotage } from '../jeu/harnais-pilotage';
 
+export interface EtatBarreReseau {
+  readonly bateauId: string;
+  readonly piloteSessionId: string;
+  readonly piloteNom: string;
+  readonly statut: 'libre' | 'occupee';
+}
+
 export interface InvitePilotageDom {
   readonly conteneur: HTMLElement;
   readonly mettreAJour: (etat: EtatHarnaisPilotage) => void;
@@ -8,8 +15,8 @@ export interface InvitePilotageDom {
 
 const LIBELLES_INVITE: Readonly<Record<EtatHarnaisPilotage['invite'], string>> = {
   prendre_barre: 'Prendre la barre',
-  embarquer: 'Embarquer à bord',
-  debarcher: 'Débarquer à un point sûr',
+  embarquer: 'Embarquer Ã  bord',
+  debarcher: 'DÃ©barquer Ã  un point sÃ»r',
   aucune: '',
 };
 
@@ -40,7 +47,7 @@ export function monterInvitePilotage(racine: HTMLElement): InvitePilotageDom {
       conteneur.dataset.mode = etat.mode;
       conteneur.dataset.invite = etat.invite;
       diagnostic.textContent =
-        `Vitesse ${etat.vitesse.toFixed(1)} m/s · Sillage ${etat.intensiteSillage.toFixed(2)} · ` +
+        `Vitesse ${etat.vitesse.toFixed(1)} m/s Â· Sillage ${etat.intensiteSillage.toFixed(2)} Â· ` +
         `Collision ${etat.collision}`;
       diagnostic.dataset.vitesse = etat.vitesse.toFixed(3);
       diagnostic.dataset.sillage = etat.intensiteSillage.toFixed(3);

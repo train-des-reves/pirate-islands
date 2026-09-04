@@ -62,6 +62,9 @@ export const BateauSchema = schema(
     sante: t.uint16().default(SANTE_BATEAU_MAXIMALE),
     actif: t.boolean().default(true),
     statut: t.string().default('amarré'),
+    piloteSessionId: t.string().default(''),
+    vitesse: t.number().default(0),
+    vitesseAngulaire: t.number().default(0),
   },
   'Bateau',
 );
