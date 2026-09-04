@@ -429,6 +429,8 @@ export class SalleJeu extends Room<{
           const données = client.userData ?? {
             indexApparition: 0,
             dernierTirMs: 0,
+            dernierLancerPecheMs: -Infinity,
+            derniereSequencePeche: 0,
             derniereSequence: 0,
             prochaineReapparitionMs: 0,
           };
@@ -450,6 +452,8 @@ export class SalleJeu extends Room<{
           client.userData ?? {
             indexApparition: 0,
             dernierTirMs: 0,
+            dernierLancerPecheMs: -Infinity,
+            derniereSequencePeche: 0,
             derniereSequence: 0,
             prochaineReapparitionMs: 0,
           },
