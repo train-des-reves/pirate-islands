@@ -224,6 +224,10 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
       (état) => état.invite === 'prendre_barre',
       'L’invite de prise de barre du pilote est absente.',
     );
+    const positionBateauAvantPrise = (await lireEtat(pagePilote)).positionBateau;
+    // Le déplacement local prépare l’invite ; cette position E2E synchronise aussi
+    // la position autoritaire du joueur avant la validation de distance du serveur.
+    await appeler(pagePilote, 'positionnerJoueurE2E', positionBateauAvantPrise);
     await demanderBarre(pagePilote);
     await attendreEtat(
       pagePilote,
