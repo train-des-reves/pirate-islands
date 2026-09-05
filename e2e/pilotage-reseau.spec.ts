@@ -340,6 +340,10 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
     );
     await expect(pageObservateur.getByTestId('pilotage-reseau-statut')).toHaveText('Barre libre');
 
+    const positionBateauAvantReprise = (await lireEtat(pageObservateur)).positionBateau;
+    // Après le mouvement, le harnais local suit le bateau ; on resynchronise
+    // aussi la position autoritaire avant de reprendre la barre.
+    await appeler(pageObservateur, 'positionnerJoueurE2E', positionBateauAvantReprise);
     await demanderBarre(pageObservateur);
     await attendreEtat(
       pageObservateur,
