@@ -212,7 +212,7 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
     }
 
     await appeler(pagePilote, 'reinitialiser');
-    await demanderBarre(pagePilote);
+    await pagePilote.keyboard.press('KeyE');
     await attendreEtat(
       pagePilote,
       (état) => état.mode === 'bord',
@@ -224,7 +224,7 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
       (état) => état.invite === 'prendre_barre',
       'L’invite de prise de barre du pilote est absente.',
     );
-    await pagePilote.keyboard.press('KeyE');
+    await demanderBarre(pagePilote);
     await attendreEtat(
       pagePilote,
       (état) =>
@@ -235,7 +235,7 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
     );
 
     await appeler(pageObservateur, 'reinitialiser');
-    await demanderBarre(pageObservateur);
+    await pageObservateur.keyboard.press('KeyE');
     await attendreEtat(
       pageObservateur,
       (état) => état.mode === 'bord',
@@ -336,7 +336,7 @@ test('synchronise la barre, le mouvement, le refus et la reprise à deux joueurs
     );
     await expect(pageObservateur.getByTestId('pilotage-reseau-statut')).toHaveText('Barre libre');
 
-    await pageObservateur.keyboard.press('KeyE');
+    await demanderBarre(pageObservateur);
     await attendreEtat(
       pageObservateur,
       (état) =>
