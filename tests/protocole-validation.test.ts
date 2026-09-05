@@ -5,6 +5,9 @@ import {
   LIMITE_HORODATAGE,
   LIMITE_SEQUENCE_TIR,
   TAILLE_MAX_GRAINE,
+  validerMessageDemandeBarre,
+  validerMessageLiberationBarre,
+  validerIntentionPilotage,
   estMessageDegatsE2EValide,
   estMessageIntentionTirValide,
   estMessagePingValide,
@@ -181,5 +184,61 @@ describe('validation runtime du protocole', () => {
     expect(validerMessageAvancerPecheE2E({ deltaMs: 3_000 }).valide).toBe(true);
     expect(validerMessageAvancerPecheE2E({ deltaMs: Number.POSITIVE_INFINITY }).valide).toBe(false);
     expect(validerMessageAvancerPecheE2E({ deltaMs: 3_000, sequence: 1 }).valide).toBe(false);
+  });
+
+  it('valide les demandes de barre sans accepter de champ parasite', () => {
+    expect(validerMessageDemandeBarre({ bateauId: 'bateau-salle' })).toBe(true);
+    expect(validerMessageLiberationBarre({ bateauId: 'bateau-salle' })).toBe(true);
+    expect(validerMessageDemandeBarre({ bateauId: '' })).toBe(false);
+    expect(validerMessageDemandeBarre({ bateauId: 'bateau-salle', sessionId: 'usurpee' })).toBe(
+      false,
+    );
+    expect(validerMessageLiberationBarre({ bateauId: Number.NaN })).toBe(false);
+  });
+
+  it('valide les intentions de pilotage avec séquence, cadence et bornes', () => {
+    const état = {
+      sessionIdProprietaire: 'session-a',
+      sessionIdPilote: 'session-a',
+      positionX: 0,
+      positionY: 0.04,
+      positionZ: 0,
+      rotationY: 0,
+      vitesse: 0,
+      vitesseAngulaire: 0,
+      dernierSequencePilote: 0,
+      dernierEnvoiMs: 0,
+    } as const;
+    const intention = {
+      bateauId: 'bateau-salle',
+      sequence: 1,
+      poussee: 1,
+      gouvernail: 0,
+      horodatageClient: 1_000,
+    };
+
+    expect(validerIntentionPilotage(intention, état, 1_000)).toMatchObject({ valide: true });
+    expect(validerIntentionPilotage({ ...intention, sequence: 0 }, état, 1_000).valide).toBe(false);
+    expect(
+      validerIntentionPilotage({ ...intention, horodatageClient: Number.NaN }, état, 1_000).valide,
+    ).toBe(false);
+    expect(
+      validerIntentionPilotage({ ...intention, poussee: Number.POSITIVE_INFINITY }, état, 1_000)
+        .valide,
+    ).toBe(false);
+    expect(validerIntentionPilotage({ ...intention, gouvernail: 2 }, état, 1_000).valide).toBe(
+      false,
+    );
+    expect(validerIntentionPilotage({ ...intention, extra: true }, état, 1_000).valide).toBe(false);
+    expect(
+      validerIntentionPilotage(
+        intention,
+        { ...état, dernierSequencePilote: 1 },
+        état.dernierEnvoiMs + 100,
+      ).valide,
+    ).toBe(false);
+    expect(
+      validerIntentionPilotage(intention, { ...état, dernierEnvoiMs: 1_000 }, 1_049).valide,
+    ).toBe(false);
   });
 });

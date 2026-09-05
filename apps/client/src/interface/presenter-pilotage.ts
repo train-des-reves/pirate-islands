@@ -1,8 +1,13 @@
 import type { EtatHarnaisPilotage } from '../jeu/harnais-pilotage';
+import type { EtatBarreReseau, RefusBarreReseau } from '../jeu/synchroniseur-pilotage';
 
 export interface InvitePilotageDom {
   readonly conteneur: HTMLElement;
-  readonly mettreAJour: (etat: EtatHarnaisPilotage) => void;
+  readonly mettreAJour: (
+    etat: EtatHarnaisPilotage,
+    barre?: EtatBarreReseau,
+    refus?: RefusBarreReseau,
+  ) => void;
   readonly detruire: () => void;
 }
 
@@ -24,6 +29,11 @@ export function monterInvitePilotage(racine: HTMLElement): InvitePilotageDom {
   texte.dataset.testid = 'invite-pilotage-texte';
   conteneur.append(texte);
 
+  const statut = document.createElement('p');
+  statut.className = 'invite-pilotage-statut';
+  statut.dataset.testid = 'pilotage-reseau-statut';
+  conteneur.append(statut);
+
   const diagnostic = document.createElement('p');
   diagnostic.className = 'invite-pilotage-diagnostic';
   diagnostic.dataset.testid = 'invite-pilotage-diagnostic';
@@ -33,12 +43,24 @@ export function monterInvitePilotage(racine: HTMLElement): InvitePilotageDom {
 
   return {
     conteneur,
-    mettreAJour: (etat) => {
+    mettreAJour: (etat, barre, refus) => {
       texte.textContent = LIBELLES_INVITE[etat.invite];
       texte.dataset.mode = etat.mode;
       texte.dataset.invite = etat.invite;
       conteneur.dataset.mode = etat.mode;
       conteneur.dataset.invite = etat.invite;
+
+      if (refus !== undefined) {
+        statut.textContent = 'Refus : ' + refus.message;
+        statut.dataset.etat = 'refusee';
+      } else if (barre?.statut === 'occupee') {
+        statut.textContent = 'Barre occupée par ' + (barre.piloteNom || 'un autre pêcheur');
+        statut.dataset.etat = 'occupee';
+      } else {
+        statut.textContent = barre === undefined ? '' : 'Barre libre';
+        statut.dataset.etat = barre === undefined ? 'inconnue' : 'libre';
+      }
+
       diagnostic.textContent =
         `Vitesse ${etat.vitesse.toFixed(1)} m/s · Sillage ${etat.intensiteSillage.toFixed(2)} · ` +
         `Collision ${etat.collision}`;

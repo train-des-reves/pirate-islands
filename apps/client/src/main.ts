@@ -12,7 +12,7 @@ import {
 } from 'babylonjs';
 
 import { GRAINE_MVP_PAR_DEFAUT, genererMonde } from '@pirate/coeur-jeu';
-import { estReponseSante, type OptionsConnexion } from '@pirate/protocole';
+import { estReponseSante, NOMS_MESSAGES, type OptionsConnexion } from '@pirate/protocole';
 
 import { CameraPremierePersonne, type EtatRegard } from './jeu/camera';
 import { construireGalerieBateauxPiratesE2E } from './jeu/bateau-pirate';
@@ -38,6 +38,12 @@ import {
   type EmetteurTransformation,
 } from './jeu/synchroniseur-pecheurs';
 import { SynchroniseurPiratesMaritimes } from './jeu/synchroniseur-pirates-maritimes';
+import {
+  creerSynchroniseurPilotage,
+  type EtatBarreReseau,
+  type RefusBarreReseau,
+  type SynchroniseurPilotage,
+} from './jeu/synchroniseur-pilotage';
 import { SynchroniseurPirates } from './jeu/synchroniseur-pirates';
 import {
   construireMondeBabylon,
@@ -480,6 +486,14 @@ interface EtatJeuE2E {
     readonly intentions: readonly IntentionTir[];
   };
   readonly pilotage?: {
+    readonly salleId?: string | undefined;
+    readonly sessionId?: string | undefined;
+    readonly bateauId?: string | undefined;
+    readonly piloteSessionId?: string | undefined;
+    readonly piloteNom?: string | undefined;
+    readonly statutBarre?: string | undefined;
+    readonly refusMotif?: string | undefined;
+    readonly refusMessage?: string | undefined;
     readonly mode: string;
     readonly invite: string;
     readonly positionJoueur: { readonly x: number; readonly y: number; readonly z: number };
@@ -524,6 +538,9 @@ declare global {
       debarquer?: () => void;
       deplacerBord?: (offset: { x: number; y?: number; z: number }) => void;
       piloter?: (intentions: { poussee: number; gouvernail: number }) => void;
+      demanderBarre?: () => void;
+      libererBarre?: () => void;
+      positionnerJoueurE2E?: (position: { x: number; y: number; z: number }) => void;
       lireEtatViseurIa?: () => EtatVisualiseurIa;
       afficherInstantViseurIa?: (instant: number) => void;
       forcerEtatCanne?: (vue: string) => void;
@@ -537,8 +554,6 @@ declare global {
       rejouerTir?: () => void;
       /** Inflige des dégâts au joueur via le mannequin E2E serveur. */
       infligerDegatsE2E?: (degats: number) => void;
-      /** Positionne le joueur sur une île via le mannequin E2E serveur. */
-      positionnerJoueurE2E?: (position: { x: number; y: number; z: number }) => void;
       /** Lit l’état autoritaire des pirates observé par ce client. */
       lirePirates?: () => readonly {
         readonly identifiant: string;
@@ -619,6 +634,7 @@ const tempsE2EInitial = Number.parseFloat(paramètres.get('temps') ?? '0');
 const tempsE2EParDefaut = Number.isFinite(tempsE2EInitial) ? Math.max(0, tempsE2EInitial) : 0;
 const horlogeTirControlee = modeE2E && paramètres.has('temps');
 const modePilotage = paramètres.get('pilotage') === '1';
+const modePilotageReseau = modePilotage && (!modeE2E || !paramètres.has('temps'));
 const modeDiagnosticSalle = modeE2E && paramètres.get('diagnostic') === 'salle';
 const modeCombatE2E = modeDiagnosticSalle && paramètres.get('combat') === '1';
 const modePecheAutoritaireE2E = modeDiagnosticSalle && paramètres.get('peche') === '1';
@@ -686,12 +702,12 @@ conteneurApplication.dataset.mode = modeBateauxPirates
       ? 'ia'
       : modePilotage
         ? 'pilote'
-      : modePecheursDistants
-        ? 'pecheurs-distants'
-        : modePirates
-          ? 'pirates'
-          : modePresentationCanne || modePresentationPeche
-            ? 'presentation'
+        : modePecheursDistants
+          ? 'pecheurs-distants'
+          : modePirates
+            ? 'pirates'
+            : modePresentationCanne || modePresentationPeche
+              ? 'presentation'
               : modeDiagnosticSalle
                 ? 'diagnostic-salle'
                 : modeMonde
@@ -1097,6 +1113,9 @@ function construireScene(): JeuClient | undefined {
       const positionInitiale = ancreEmb
         ? { x: ancreEmb.position.x, y: ancreEmb.position.y + 0.5, z: ancreEmb.position.z }
         : { x: positionBateau.x, y: positionBateau.y + 1.7, z: positionBateau.z - 3 };
+      let synchroniseurPilotageReseau: SynchroniseurPilotage | undefined;
+      let dernierEtatBarreReseau: EtatBarreReseau | undefined;
+      let dernierRefusBarreReseau: RefusBarreReseau | undefined;
 
       const harnais = construireHarnaisPilotage({
         descripteur,
@@ -1114,6 +1133,109 @@ function construireScene(): JeuClient | undefined {
           conteneurApplication.dataset.collisionBateau = etat.collision;
         },
       });
+
+      const positionPassagerAvecPoseReseau = (
+        local: ReturnType<typeof harnais.lireEtat>,
+        pose: NonNullable<ReturnType<SynchroniseurPilotage['lirePose']>>,
+      ): { x: number; y: number; z: number } => {
+        const deltaX = local.positionJoueur.x - local.positionBateau.x;
+        const deltaY = local.positionJoueur.y - local.positionBateau.y;
+        const deltaZ = local.positionJoueur.z - local.positionBateau.z;
+        const cosinusLocal = Math.cos(local.rotationBateau);
+        const sinusLocal = Math.sin(local.rotationBateau);
+        const localX = deltaX * cosinusLocal - deltaZ * sinusLocal;
+        const localZ = deltaX * sinusLocal + deltaZ * cosinusLocal;
+        const cosinusReseau = Math.cos(pose.rotationY);
+        const sinusReseau = Math.sin(pose.rotationY);
+        return {
+          x: pose.positionX + localX * cosinusReseau + localZ * sinusReseau,
+          y: pose.positionY + deltaY,
+          z: pose.positionZ - localX * sinusReseau + localZ * cosinusReseau,
+        };
+      };
+
+      const lireEtatPilotage = (): NonNullable<EtatJeuE2E['pilotage']> => {
+        const local = harnais.lireEtat();
+        const pose = synchroniseurPilotageReseau?.lirePose();
+        const salle = connecteurPanneau?.lireSalle();
+        const intensiteSillage = pose
+          ? Math.min(1, Math.max(0, Math.abs(pose.vitesse) / 12))
+          : local.intensiteSillage;
+        return {
+          salleId: connecteurPanneau?.salleId,
+          sessionId: salle?.sessionId,
+          bateauId: pose?.bateauId,
+          piloteSessionId: pose?.piloteSessionId,
+          piloteNom: pose?.piloteNom,
+          statutBarre: pose?.statut,
+          ...(dernierRefusBarreReseau
+            ? {
+                refusMotif: dernierRefusBarreReseau.motif,
+                refusMessage: dernierRefusBarreReseau.message,
+              }
+            : {}),
+          mode: local.mode,
+          invite: local.invite,
+          positionJoueur: pose ? positionPassagerAvecPoseReseau(local, pose) : local.positionJoueur,
+          positionBateau: pose
+            ? { x: pose.positionX, y: pose.positionY, z: pose.positionZ }
+            : local.positionBateau,
+          rotationBateau: pose?.rotationY ?? local.rotationBateau,
+          vitesse: pose?.vitesse ?? local.vitesse,
+          collision: local.collision,
+          intensiteSillage,
+        };
+      };
+
+      const actualiserInvitePilotage = (): void => {
+        const local = harnais.lireEtat();
+        const barre = dernierEtatBarreReseau ?? synchroniseurPilotageReseau?.lireEtatBarre();
+        invite.mettreAJour(local, barre, dernierRefusBarreReseau);
+        conteneurApplication.dataset.modePilotage = local.mode;
+        conteneurApplication.dataset.invitePilotage = local.invite;
+        conteneurApplication.dataset.vitesseBateau = (
+          synchroniseurPilotageReseau?.lirePose()?.vitesse ?? local.vitesse
+        ).toFixed(3);
+        conteneurApplication.dataset.sillageBateau = (
+          synchroniseurPilotageReseau?.lirePose()
+            ? Math.min(
+                1,
+                Math.max(0, Math.abs(synchroniseurPilotageReseau.lirePose()!.vitesse) / 12),
+              )
+            : local.intensiteSillage
+        ).toFixed(3);
+        conteneurApplication.dataset.collisionBateau = local.collision;
+      };
+
+      const agirPilotageReseau = (): void => {
+        const local = harnais.lireEtat();
+        if (!synchroniseurPilotageReseau || !connecteurPanneau?.lireSalle()) {
+          harnais.agir();
+          return;
+        }
+        if (local.mode === 'pilote') {
+          synchroniseurPilotageReseau.libererBarre();
+        } else if (local.mode === 'bord' && local.invite === 'prendre_barre') {
+          synchroniseurPilotageReseau.demanderBarre();
+        } else {
+          harnais.agir();
+        }
+      };
+
+      const appliquerEtatBarreReseau = (etat: EtatBarreReseau): void => {
+        dernierEtatBarreReseau = etat;
+        dernierRefusBarreReseau = undefined;
+        const sessionLocale = connecteurPanneau?.lireSalle()?.sessionId;
+        const local = harnais.lireEtat();
+        if (sessionLocale && etat.piloteSessionId === sessionLocale) {
+          if (local.mode === 'bord' && local.invite === 'prendre_barre') {
+            harnais.agir();
+          }
+        } else if (local.mode === 'pilote') {
+          harnais.agir();
+        }
+        actualiserInvitePilotage();
+      };
 
       const camera = mondeBabylon.camera;
       camera.fov = 1.05;
@@ -1163,7 +1285,7 @@ function construireScene(): JeuClient | undefined {
           // la barre, le rend à bord.
           mettreEnPausePilotage();
           if (harnais.lireEtat().mode === 'pilote') {
-            harnais.agir();
+            agirPilotageReseau();
           }
         },
       });
@@ -1200,16 +1322,36 @@ function construireScene(): JeuClient | undefined {
                 invite: null,
                 statut: '',
               },
-              pilotage: etat as unknown as NonNullable<EtatJeuE2E['pilotage']>,
+              pilotage: lireEtatPilotage(),
             };
           },
           lireReglages: () => clonerReglagesPourLecture(reglages.applique),
           reinitialiser: () => harnais.reinitialiser(),
-          agir: () => harnais.agir(),
-          piloter: (intentions) => harnais.piloter(intentions),
+          agir: () => agirPilotageReseau(),
+          piloter: (intentions) => {
+            harnais.piloter(intentions);
+            synchroniseurPilotageReseau?.envoyerIntention(
+              undefined,
+              intentions.poussee,
+              intentions.gouvernail,
+            );
+          },
+          demanderBarre: () => synchroniseurPilotageReseau?.demanderBarre(),
+          libererBarre: () => synchroniseurPilotageReseau?.libererBarre(),
+          positionnerJoueurE2E: (position) => {
+            connecteurPanneau?.lireSalle()?.send(NOMS_MESSAGES.positionE2E, {
+              position: { ...position },
+            });
+          },
           tirer: () => undefined,
           avancerTemps: (deltaMs) =>
-            harnais.avancerTemps((Number.isFinite(deltaMs) ? deltaMs : 0) / 1000),
+            modePilotageReseau && synchroniseurPilotageReseau
+              ? (synchroniseurPilotageReseau.mettreAJour(),
+                synchroniseurPilotageReseau.mettreAJourInterpolation(
+                  (Number.isFinite(deltaMs) ? deltaMs : 0) / 1000,
+                ),
+                actualiserInvitePilotage())
+              : harnais.avancerTemps((Number.isFinite(deltaMs) ? deltaMs : 0) / 1000),
         };
         (window.__pirateIslandsE2E as { debarquer?: () => void }).debarquer = () =>
           harnais.debarquer();
@@ -1238,13 +1380,39 @@ function construireScene(): JeuClient | undefined {
       // seule source de progression.
       let dernierTemps = performance.now();
       const observer = scene.onAfterRenderObservable.add(() => {
-        const suivant = harnais.lireEtat();
-        invite.mettreAJour(suivant);
+        actualiserInvitePilotage();
       });
       const boucle = (): void => {
         const maintenant = performance.now();
         const deltaSecondes = Math.min(0.25, Math.max(0, (maintenant - dernierTemps) / 1000));
         dernierTemps = maintenant;
+
+        const salle = connecteurPanneau?.lireSalle();
+        if (modePilotageReseau && salle && !synchroniseurPilotageReseau) {
+          synchroniseurPilotageReseau = creerSynchroniseurPilotage({
+            obtenirSalle: () => connecteurPanneau?.lireSalle(),
+            sessionIdLocale: () => connecteurPanneau?.lireSalle()?.sessionId ?? '',
+            surEtatBarre: appliquerEtatBarreReseau,
+            surRefusBarre: (refus) => {
+              dernierRefusBarreReseau = refus;
+              actualiserInvitePilotage();
+            },
+          });
+        }
+        synchroniseurPilotageReseau?.mettreAJour();
+        synchroniseurPilotageReseau?.mettreAJourInterpolation(deltaSecondes);
+        const pose = synchroniseurPilotageReseau?.lirePose();
+        if (pose) {
+          controle.appliquerNavigation({
+            position: { x: pose.positionX, y: pose.positionY, z: pose.positionZ },
+            rotationY: pose.rotationY,
+            vitesse: pose.vitesse,
+            acceleration: 0,
+            vitesseAngulaire: pose.vitesseAngulaire,
+            collision: 'aucune',
+            intensiteSillage: Math.min(1, Math.max(0, Math.abs(pose.vitesse) / 12)),
+          });
+        }
         const actions = entreesPilotage.lireEtat();
         const transitions = entreesPilotage.lireTransitions();
         // « interagir » est une action transitoire : on ne déclenche la
@@ -1252,7 +1420,7 @@ function construireScene(): JeuClient | undefined {
         // En mode E2E, la simulation reste pilotée par `avancerTemps` ; seule
         // l'interaction issue des vraies touches est traitée ici.
         if (transitions.appuyees.includes('interagir')) {
-          harnais.agir();
+          agirPilotageReseau();
         }
         if (!modeE2E) {
           if (!enPausePilotage) {
@@ -1270,7 +1438,9 @@ function construireScene(): JeuClient | undefined {
         // La caméra suit le passager du bateau pour rendre la marée et la
         // cale visibles : derrière lui selon le lacet de la caméra.
         const etat = harnais.lireEtat();
-        const position = etat.positionJoueur;
+        const position = pose
+          ? { x: pose.positionX, y: pose.positionY + 1.62, z: pose.positionZ }
+          : etat.positionJoueur;
         const lacet = mondeBabylon.camera.rotation.y;
         const distance = 3.4;
         const hauteur = 2.1;
@@ -1280,6 +1450,7 @@ function construireScene(): JeuClient | undefined {
           position.z - Math.cos(lacet) * distance,
         );
         mondeBabylon.camera.setTarget(new Vector3(position.x, position.y + 0.4, position.z));
+        actualiserInvitePilotage();
         scene.render();
       };
       moteur.runRenderLoop(boucle);
@@ -1294,6 +1465,9 @@ function construireScene(): JeuClient | undefined {
           scene.onAfterRenderObservable.remove(observer);
           moteur.stopRenderLoop(boucle);
           invite.detruire();
+          synchroniseurPilotageReseau?.detruire();
+          connecteurPanneau?.detruire();
+          connecteurPanneau = undefined;
           controle.liberer();
           mondeBabylon.liberer();
           moteur.dispose();
@@ -1997,6 +2171,7 @@ async function rejoindreSalle(): Promise<void> {
   const urlServeur = urlServeurPartirDe(import.meta.env.VITE_SERVER_URL ?? 'http://127.0.0.1:2567');
   const optionsConnexion: OptionsConnexion = {
     ...(nom ? { nom } : {}),
+    ...(modePilotage && graine ? { graine } : {}),
   };
 
   connecteurPanneau = await connecterSalleJeu(
@@ -2054,6 +2229,14 @@ if (modePecheursDistants) {
   if (salleE2E) {
     champSalleElement.value = salleE2E;
   }
+  void rejoindreSalle();
+}
+
+if (modePilotageReseau && modeE2E) {
+  const nomE2E = paramètres.get('nom')?.trim();
+  const salleE2E = paramètres.get('room')?.trim();
+  champNomElement.value = nomE2E || 'Pêcheur-Pilote-0001';
+  champSalleElement.value = salleE2E ?? '';
   void rejoindreSalle();
 }
 

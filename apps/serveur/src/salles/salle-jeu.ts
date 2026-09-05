@@ -14,6 +14,7 @@ import {
   type MessageAnnulerPeche,
   type MessageAvancerPecheE2E,
   type EtatSalle,
+  type Bateau,
   type Joueur,
   type MessageDegatsE2E,
   type MessageIntentionTir,
@@ -26,6 +27,11 @@ import {
   type MessagePong,
   type MessageResultatTir,
   type MessageTransformationJoueur,
+  type MessageDemandeBarre,
+  type MessageRefusBarre,
+  type MessageLiberationBarre,
+  type MessageIntentionPilotage,
+  type MessageEtatBarre,
   type MetadonneesSalleMatchmaking,
   validerMessageAnnulerPeche,
   validerMessageAvancerPecheE2E,
@@ -37,6 +43,10 @@ import {
   validerMessagePositionE2E,
   validerMessageReleverPeche,
   validerMessageTransformationJoueur,
+  validerMessageDemandeBarre,
+  validerMessageLiberationBarre,
+  validerIntentionPilotage,
+  DISTANCE_MAXIMALE_BARRE,
   validerOptionsConnexion,
   VITESSE_MAXIMALE_JOUEUR,
 } from '@pirate/protocole';
@@ -69,6 +79,12 @@ import {
   type EtatBateauMaritimeSimulation,
   type EtatPeche,
   type SortieIaPirate,
+  appliquerTraînéeBateau,
+  creerEtatBateauPilotage,
+  type EtatBateauPilotage,
+  type IntentionsPilotageServeur,
+  simulerPasPilotage,
+  DELTA_SIMULATION_BATEAU,
   validerIntentionServeur,
 } from '@pirate/coeur-jeu';
 import { Room, type AuthContext, type Client } from '@colyseus/core';
@@ -87,9 +103,18 @@ interface MessagesSalle {
   [NOMS_MESSAGES.avancerPecheE2E]: MessageAvancerPecheE2E;
   [NOMS_MESSAGES.degatsE2E]: MessageDegatsE2E;
   [NOMS_MESSAGES.positionE2E]: MessagePositionE2E;
+  [NOMS_MESSAGES.demandeBarre]: MessageDemandeBarre;
+  [NOMS_MESSAGES.liberationBarre]: MessageLiberationBarre;
+  [NOMS_MESSAGES.intentionPilotage]: MessageIntentionPilotage;
+  [NOMS_MESSAGES.etatBarre]: MessageEtatBarre;
+  [NOMS_MESSAGES.refusBarre]: MessageRefusBarre;
 }
 
 /** Données joueur privées conservées côté serveur, jamais dévoilées au client. */
+interface EtatPilotageBateau extends EtatBateauPilotage {
+  intentions: IntentionsPilotageServeur;
+}
+
 interface DonneesClientSalle {
   readonly indexApparition: number;
   readonly dernierTirMs: number;
@@ -196,6 +221,8 @@ export class SalleJeu extends Room<{
   private readonly etatsPeche = new Map<string, EtatPeche>();
   private monde: ReturnType<typeof genererMonde> = genererMonde();
   private modeE2E = false;
+  private readonly bateauxPilotage = new Map<string, EtatPilotageBateau>();
+  private accumulationPilotageMs = 0;
   private simulationMaritime: SimulationPiratesMaritimes | undefined;
   private accumulationMaritimeMs = 0;
   private readonly echeancesSuppressionBateaux = new Map<string, number>();
@@ -238,6 +265,7 @@ export class SalleJeu extends Room<{
       if (this.horloge.automatique && !this.modeE2E) {
         this.horloge.avancerMs(deltaMs);
       }
+      this.actualiserSimulationPilotage(deltaMs);
       this.actualiserPeches();
       this.actualiserSimulationMaritime(deltaMs);
       this.actualiserSimulationPirates();
@@ -284,6 +312,7 @@ export class SalleJeu extends Room<{
 
     this.state.joueurs.set(client.sessionId, joueur);
     this.state.bateaux.set(bateau.identifiant, bateau);
+    this.initialiserEtatPilotage(bateau);
     this.state.phase = PHASE_SALLE_PARTIE;
 
     // La référence de vitesse est initialisée sur la transformation d'apparition
@@ -298,13 +327,134 @@ export class SalleJeu extends Room<{
   }
 
   override onLeave(client: ClientSalle): void {
+    const bateauPilotageId = this.bateauPilotageId();
+    const bateauPilotage = bateauPilotageId ? this.state.bateaux.get(bateauPilotageId) : undefined;
+    const étatPilotage = bateauPilotageId ? this.bateauxPilotage.get(bateauPilotageId) : undefined;
+
+    if (bateauPilotage && étatPilotage?.piloteSessionId === client.sessionId) {
+      this.arreterPilotage(bateauPilotage, étatPilotage);
+      this.publierEtatBarre(bateauPilotage);
+    }
+
     this.state.joueurs.delete(client.sessionId);
-    this.state.bateaux.delete('bateau-' + client.sessionId);
+    const bateauPersonnelId = 'bateau-' + client.sessionId;
+    if (bateauPersonnelId !== bateauPilotageId) {
+      this.state.bateaux.delete(bateauPersonnelId);
+      this.bateauxPilotage.delete(bateauPersonnelId);
+    }
     this.dernièresTransformations.delete(client.sessionId);
     this.nettoyerLignePeche(client.sessionId);
 
     if (this.state.joueurs.size === 0) {
+      if (bateauPilotageId) {
+        this.state.bateaux.delete(bateauPilotageId);
+        this.bateauxPilotage.delete(bateauPilotageId);
+      }
       this.state.phase = PHASE_SALLE_ATTENTE;
+      this.accumulationPilotageMs = 0;
+    } else if (bateauPilotage) {
+      const prochainProprietaire = this.state.joueurs.values().next().value as Joueur | undefined;
+      if (prochainProprietaire) {
+        bateauPilotage.proprietaireSessionId = prochainProprietaire.sessionId;
+        const état = bateauPilotageId ? this.bateauxPilotage.get(bateauPilotageId) : undefined;
+        if (état) {
+          état.proprietaireSessionId = prochainProprietaire.sessionId;
+        }
+      }
+    }
+  }
+
+  /** Initialise la copie privée de l'état de pilotage pour un bateau. */
+  private initialiserEtatPilotage(bateau: Bateau): void {
+    const état = creerEtatBateauPilotage(
+      bateau.identifiant,
+      bateau.proprietaireSessionId,
+      bateau.transformation.x,
+      bateau.transformation.y,
+      bateau.transformation.z,
+      bateau.transformation.lacet,
+    );
+    this.bateauxPilotage.set(bateau.identifiant, {
+      ...état,
+      intentions: { poussee: 0, gouvernail: 0 },
+    });
+  }
+
+  /** Le premier bateau créé reste le navire partagé de la session. */
+  private bateauPilotageId(): string | undefined {
+    return this.state.bateaux.keys().next().value as string | undefined;
+  }
+
+  /** Copie l'état privé autoritaire dans le schéma synchronisé. */
+  private synchroniserEtatPilotage(bateau: Bateau, état: EtatPilotageBateau): void {
+    bateau.proprietaireSessionId = état.proprietaireSessionId;
+    bateau.piloteSessionId = état.piloteSessionId ?? '';
+    bateau.transformation.x = état.positionX;
+    bateau.transformation.y = état.positionY;
+    bateau.transformation.z = état.positionZ;
+    bateau.transformation.lacet = état.rotationY;
+    bateau.vitesse = état.vitesse;
+    bateau.vitesseAngulaire = état.vitesseAngulaire;
+    bateau.statut = état.piloteSessionId === null ? 'amarré' : 'en_mouvement';
+  }
+
+  /** Publie l'état courant de la barre à tous les clients de la salle. */
+  private publierEtatBarre(bateau: Bateau): void {
+    const état = this.bateauxPilotage.get(bateau.identifiant);
+    if (!état) {
+      return;
+    }
+    const pilote = état.piloteSessionId ? this.state.joueurs.get(état.piloteSessionId) : undefined;
+    this.broadcast(NOMS_MESSAGES.etatBarre, {
+      bateauId: bateau.identifiant,
+      piloteSessionId: état.piloteSessionId ?? '',
+      piloteNom: pilote?.nom ?? '',
+      statut: état.piloteSessionId === null ? 'libre' : 'occupee',
+      positionX: état.positionX,
+      positionY: état.positionY,
+      positionZ: état.positionZ,
+      rotationY: état.rotationY,
+      vitesse: état.vitesse,
+      vitesseAngulaire: état.vitesseAngulaire,
+      sequence: état.dernierSequence,
+    });
+  }
+
+  /** Arrête un bateau et rend sa barre disponible. */
+  private arreterPilotage(bateau: Bateau, état: EtatPilotageBateau): void {
+    état.piloteSessionId = null;
+    état.intentions = { poussee: 0, gouvernail: 0 };
+    état.vitesse = 0;
+    état.vitesseAngulaire = 0;
+    état.dernierSequence = 0;
+    état.dernierEnvoiMs = 0;
+    this.synchroniserEtatPilotage(bateau, état);
+  }
+
+  /** Simule tous les bateaux à une cadence fixe, quelle que soit la cadence des callbacks. */
+  private actualiserSimulationPilotage(deltaMs: number): void {
+    const deltaSain = Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+    this.accumulationPilotageMs = Math.min(1_000, this.accumulationPilotageMs + deltaSain);
+
+    while (this.accumulationPilotageMs >= DELTA_SIMULATION_BATEAU * 1_000) {
+      this.accumulationPilotageMs -= DELTA_SIMULATION_BATEAU * 1_000;
+      for (const [bateauId, état] of this.bateauxPilotage) {
+        const bateau = this.state.bateaux.get(bateauId);
+        if (!bateau) {
+          this.bateauxPilotage.delete(bateauId);
+          continue;
+        }
+
+        if (état.piloteSessionId === null) {
+          appliquerTraînéeBateau(état, DELTA_SIMULATION_BATEAU);
+        } else {
+          simulerPasPilotage(état, état.intentions);
+        }
+        this.synchroniserEtatPilotage(bateau, état);
+        if (état.piloteSessionId !== null) {
+          this.publierEtatBarre(bateau);
+        }
+      }
     }
   }
 
@@ -694,6 +844,21 @@ export class SalleJeu extends Room<{
       return;
     }
 
+    if (type === NOMS_MESSAGES.demandeBarre) {
+      this.traiterDemandeBarre(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.liberationBarre) {
+      this.traiterLiberationBarre(client, message);
+      return;
+    }
+
+    if (type === NOMS_MESSAGES.intentionPilotage) {
+      this.traiterIntentionPilotage(client, message);
+      return;
+    }
+
     this.rejeterMessage(client, CODE_MESSAGE_INCONNU, 'Le message demandé est inconnu.');
   }
 
@@ -1006,7 +1171,12 @@ export class SalleJeu extends Room<{
         z: position.z,
       }),
     );
-    if (!surUneIle) {
+    const procheDUnBateau = [...this.state.bateaux.values()].some(
+      (bateau) =>
+        Math.hypot(position.x - bateau.transformation.x, position.z - bateau.transformation.z) <=
+        DISTANCE_MAXIMALE_BARRE + 1,
+    );
+    if (!surUneIle && !procheDUnBateau) {
       this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'La position E2E doit être sur une île.');
       return;
     }
@@ -1083,7 +1253,11 @@ export class SalleJeu extends Room<{
     const origine = { x: commande.origineX, y: commande.origineY, z: commande.origineZ };
     const flotteur = { x: commande.flotteurX, y: commande.flotteurY, z: commande.flotteurZ };
     if (!pointDansZonePeche(zone, positionJoueur)) {
-      this.refuserActionPeche(client, CODE_MESSAGE_INVALIDE, 'Le joueur est hors de la zone de pêche.');
+      this.refuserActionPeche(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Le joueur est hors de la zone de pêche.',
+      );
       return;
     }
     if (
@@ -1369,8 +1543,158 @@ export class SalleJeu extends Room<{
     client.error(code, raison);
   }
 
+  private refuserBarre(
+    client: ClientSalle,
+    bateauId: string,
+    motif: MessageRefusBarre['motif'],
+    message: string,
+  ): void {
+    client.send(NOMS_MESSAGES.refusBarre, { bateauId, motif, message });
+  }
+
   private rejeterMessage(client: ClientSalle, code: number, raison: string): void {
     client.error(code, raison);
     client.leave(code, raison);
+  }
+
+  private traiterDemandeBarre(client: ClientSalle, message: unknown): void {
+    const validation = validerMessageDemandeBarre(message);
+    if (!validation) {
+      this.rejeterMessage(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Le message de demande de barre est invalide.',
+      );
+      return;
+    }
+    const bateauId = (message as MessageDemandeBarre).bateauId;
+    const bateau = this.state.bateaux.get(bateauId);
+    if (!bateau) {
+      this.refuserBarre(client, bateauId, 'invalide', 'Le bateau demandé n’existe pas.');
+      return;
+    }
+    const état = this.bateauxPilotage.get(bateauId);
+    const joueur = this.state.joueurs.get(client.sessionId);
+    if (!joueur || !état) {
+      this.rejeterMessage(client, CODE_MESSAGE_INVALIDE, 'Le joueur est inconnu.');
+      return;
+    }
+
+    if (!joueur.vivant) {
+      this.refuserBarre(
+        client,
+        bateauId,
+        'invalide',
+        'Un pêcheur mort ne peut pas tenir la barre.',
+      );
+      return;
+    }
+
+    if (état.piloteSessionId !== null) {
+      this.refuserBarre(
+        client,
+        bateauId,
+        état.piloteSessionId === client.sessionId ? 'deja-pilote' : 'barre-occupee',
+        état.piloteSessionId === client.sessionId
+          ? 'Vous tenez déjà la barre.'
+          : 'La barre est occupée par un autre pêcheur.',
+      );
+      this.publierEtatBarre(bateau);
+      return;
+    }
+
+    const distance = Math.hypot(
+      joueur.transformation.x - bateau.transformation.x,
+      joueur.transformation.z - bateau.transformation.z,
+    );
+    if (distance > DISTANCE_MAXIMALE_BARRE) {
+      this.refuserBarre(
+        client,
+        bateauId,
+        'distance',
+        'Vous êtes trop loin de la barre pour la prendre.',
+      );
+      return;
+    }
+
+    état.piloteSessionId = client.sessionId;
+    état.intentions = { poussee: 0, gouvernail: 0 };
+    this.synchroniserEtatPilotage(bateau, état);
+    this.publierEtatBarre(bateau);
+  }
+
+  private traiterLiberationBarre(client: ClientSalle, message: unknown): void {
+    const validation = validerMessageLiberationBarre(message);
+    if (!validation) {
+      this.rejeterMessage(
+        client,
+        CODE_MESSAGE_INVALIDE,
+        'Le message de libération de barre est invalide.',
+      );
+      return;
+    }
+    const bateauId = (message as MessageLiberationBarre).bateauId;
+    const bateau = this.state.bateaux.get(bateauId);
+    const état = this.bateauxPilotage.get(bateauId);
+    if (!bateau || !état) {
+      this.refuserBarre(client, bateauId, 'invalide', 'Le bateau demandé n’existe pas.');
+      return;
+    }
+
+    if (état.piloteSessionId !== client.sessionId) {
+      return;
+    }
+
+    this.arreterPilotage(bateau, état);
+    this.publierEtatBarre(bateau);
+  }
+
+  private traiterIntentionPilotage(client: ClientSalle, message: unknown): void {
+    if (typeof message !== 'object' || message === null) {
+      client.error(CODE_MESSAGE_INVALIDE, 'L’intention de pilotage est invalide.');
+      return;
+    }
+    const objet = message as Record<string, unknown>;
+    const bateauId = typeof objet.bateauId === 'string' ? objet.bateauId : '';
+    const bateau = this.state.bateaux.get(bateauId);
+    const état = this.bateauxPilotage.get(bateauId);
+    if (!bateau || !état) {
+      client.error(CODE_MESSAGE_INVALIDE, 'Le bateau demandé n’existe pas.');
+      return;
+    }
+
+    if (état.piloteSessionId !== client.sessionId) {
+      return;
+    }
+
+    const validation = validerIntentionPilotage(
+      message,
+      {
+        sessionIdProprietaire: état.proprietaireSessionId,
+        sessionIdPilote: état.piloteSessionId,
+        positionX: état.positionX,
+        positionY: état.positionY,
+        positionZ: état.positionZ,
+        rotationY: état.rotationY,
+        vitesse: état.vitesse,
+        vitesseAngulaire: état.vitesseAngulaire,
+        dernierSequencePilote: état.dernierSequence,
+        dernierEnvoiMs: état.dernierEnvoiMs,
+      },
+      Date.now(),
+    );
+    if (!validation.valide) {
+      client.error(CODE_MESSAGE_INVALIDE, validation.raison);
+      return;
+    }
+
+    état.intentions = {
+      poussee: validation.intention.poussee,
+      gouvernail: validation.intention.gouvernail,
+    };
+    état.dernierSequence = validation.intention.sequence;
+    état.dernierEnvoiMs = Date.now();
+    this.synchroniserEtatPilotage(bateau, état);
+    this.publierEtatBarre(bateau);
   }
 }

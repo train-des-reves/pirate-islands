@@ -29,3 +29,4 @@ export * from './aleatoire.js';
 export * from './ia-pirate.js';
 export * from './rencontre-maritime.js';
 export * from './simulation-pirate.js';
+export * from './simulation-pilotage.js';

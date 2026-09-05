@@ -160,6 +160,30 @@ La branche produit `pilotage-barre-1280x720.png`,
 `pilotage-sortie-barre-1280x720.png` et `pilotage-cale-1280x720.png`, ainsi que
 la vidéo `pilotage-bateau.webm`.
 
+## Preuve visuelle — pilotage autoritaire à deux joueurs
+
+Le scénario ouvre deux contextes Chromium isolés. Le premier pêcheur prend la
+barre et fait avancer le bateau ; le second observe la même pose interpolée et
+reçoit le message français « Barre occupée par… ». La fermeture du premier
+contexte arrête le bateau, libère la barre et permet au second pêcheur de la
+reprendre.
+
+Commande exacte :
+
+```bash
+pnpm test:e2e -- e2e/pilotage-reseau.spec.ts --workers=1
+```
+
+URL déterministe du premier contexte :
+`http://127.0.0.1:4173/?e2e=1&pilotage=1&graine=mvp-defaut&nom=Pêcheur-Aube-0001`.
+Le second contexte rejoint la salle renvoyée par le premier via le paramètre
+`room` et utilise le nom `Pêcheur-Brume-0002`.
+
+La branche produit le composite `pilotage-reseau-1280x720.png` et la vue de
+reprise `pilotage-reseau-reprise-1280x720.png`. Le relecteur vérifie
+l’exclusivité de la barre, la convergence des deux poses, l’absence de dérive
+du passager et la reprise après déconnexion.
+
 ## Preuve de la rencontre maritime
 
 Commande exacte :

@@ -14,6 +14,11 @@ export const NOMS_MESSAGES = Object.freeze({
   avancerPecheE2E: 'jeu:e2e-avancer-peche',
   degatsE2E: 'jeu:e2e-degats',
   positionE2E: 'jeu:e2e-position',
+  demandeBarre: 'bateau:demande-barre',
+  liberationBarre: 'bateau:liberation-barre',
+  intentionPilotage: 'bateau:intention-pilotage',
+  etatBarre: 'bateau:etat-barre',
+  refusBarre: 'bateau:refus-barre',
 } as const);
 
 export type NomMessage = (typeof NOMS_MESSAGES)[keyof typeof NOMS_MESSAGES];
