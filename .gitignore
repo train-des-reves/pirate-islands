@@ -8,6 +8,7 @@ playwright-report/
 .env
 .env.*
 !.env.example
+.codex/etat-surveillant/
 docs/preuves/playwright-resultats/
 !docs/preuves/playwright-report/
 !docs/preuves/playwright-report/**
